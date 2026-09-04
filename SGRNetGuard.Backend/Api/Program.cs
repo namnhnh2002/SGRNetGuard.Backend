@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.FileProviders;
 using SGRNetGuard.Api.Data;
 using SGRNetGuard.Api.Hubs;
 using SGRNetGuard.Api.Models;
@@ -259,7 +260,10 @@ app.Use(async (context, next) =>
 });
 
 app.UseDefaultFiles();   // cho phép "/" tự trả về wwwroot/index.html (trang Dashboard)
-app.UseStaticFiles();    // phục vụ dashboard.js, style.css trong wwwroot/
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(Path.Combine(AppContext.BaseDirectory, "wwwroot"))
+});    // phục vụ dashboard.js, style.css trong wwwroot/
 
 static IResult DatabaseUnavailable(string message) => Results.Json(new
 {
