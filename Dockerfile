@@ -13,6 +13,6 @@ RUN dotnet publish SGRNetGuard.Backend/Api/SGRNetGuard.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
+COPY SGRNetGuard.Backend/Api/wwwroot ./wwwroot
 
-ENV ASPNETCORE_URLS=http://0.0.0.0:${PORT}
-ENTRYPOINT ["dotnet", "SGRNetGuard.Api.dll"]
+ENTRYPOINT ["sh", "-c", "dotnet SGRNetGuard.Api.dll --urls http://0.0.0.0:${PORT}"]
