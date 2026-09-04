@@ -1,9 +1,8 @@
 services:
   - type: web
     name: sgr-netguard-api
-    runtime: dotnet
-    buildCommand: dotnet publish SGRNetGuard.Backend/Api/SGRNetGuard.Api.csproj -c Release -o publish
-    startCommand: dotnet publish/SGRNetGuard.Api.dll --urls http://0.0.0.0:$PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
