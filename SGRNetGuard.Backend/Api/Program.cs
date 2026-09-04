@@ -259,10 +259,15 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseDefaultFiles();   // cho phép "/" tự trả về wwwroot/index.html (trang Dashboard)
+var webRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+var webRootProvider = new PhysicalFileProvider(webRootPath);
+app.UseDefaultFiles(new DefaultFilesOptions
+{
+    FileProvider = webRootProvider
+});   // cho phép "/" tự trả về wwwroot/index.html (trang Dashboard)
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(AppContext.BaseDirectory, "wwwroot"))
+    FileProvider = webRootProvider
 });    // phục vụ dashboard.js, style.css trong wwwroot/
 
 static IResult DatabaseUnavailable(string message) => Results.Json(new
