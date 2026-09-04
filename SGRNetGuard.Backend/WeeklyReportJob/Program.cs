@@ -2,7 +2,7 @@ using ClosedXML.Excel;
 using Dapper;
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 
@@ -11,17 +11,17 @@ var config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false)
     .Build();
 
-var connectionString = config.GetConnectionString("SGRNetGuard")
+var connectionString = config.GetConnectionString("SGRNetGuard") ?? config["DATABASE_URL"]
     ?? throw new InvalidOperationException("Thiếu ConnectionStrings:SGRNetGuard");
 
 Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Bắt đầu tạo báo cáo hiệu năng hàng tuần...");
 
 // 1. Lấy dữ liệu từ view vw_WeeklyPerformanceReport (7 ngày gần nhất)
 List<WeeklyRow> rows;
-using (var conn = new SqlConnection(connectionString))
+using (var conn = new NpgsqlConnection(connectionString))
 {
     rows = (await conn.QueryAsync<WeeklyRow>(
-        "SELECT * FROM dbo.vw_WeeklyPerformanceReport ORDER BY TotalWarningCount DESC")).ToList();
+        "SELECT * FROM public.vw_WeeklyPerformanceReport ORDER BY TotalWarningCount DESC")).ToList();
 }
 
 Console.WriteLine($"Tìm thấy {rows.Count} máy có cảnh báo hiệu năng trong 7 ngày qua.");

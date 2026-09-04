@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.1" />
+    <PackageReference Include="Npgsql" Version="8.0.6" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="ClosedXML" Version="0.104.1" />
     <PackageReference Include="MailKit" Version="4.7.1" />

@@ -132,7 +132,7 @@ if (-not (Test-Path $appSettingsPath)) {
 
 $raw = Get-Content -Path $appSettingsPath -Raw
 $appSettings = $raw | ConvertFrom-Json
-$appSettings.ConnectionStrings.SGRNetGuard = "Server=$SqlServer;Database=$SqlDatabase;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;"
+$appSettings.ConnectionStrings.SGRNetGuard = "Host=$SqlServer;Port=5432;Database=$SqlDatabase;Username=YOUR_USER;Password=YOUR_PASSWORD;"
 $appSettings.Urls = "http://0.0.0.0:5080"
 $appSettings | ConvertTo-Json -Depth 20 | Set-Content -Path $appSettingsPath -Encoding UTF8
 Write-Host "Đã cập nhật connection string trong appsettings.json"
@@ -172,4 +172,4 @@ Write-Host ""
 Write-Host "Deploy hoàn tất."
 Write-Host "Site: https://$HostName/"
 Write-Host "Health check: https://$HostName/api/health/db"
-Write-Host "Lưu ý: App Pool account ($ServiceAccount) cần được DBA cấp quyền vào SQL Server."
+Write-Host "Lưu ý: cấu hình PostgreSQL bằng ConnectionStrings__SGRNetGuard hoặc DATABASE_URL."

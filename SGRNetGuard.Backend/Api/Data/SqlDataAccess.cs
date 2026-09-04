@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using SGRNetGuard.Api.Models;
 
 namespace SGRNetGuard.Api.Data;
@@ -14,11 +14,41 @@ public class SqlDataAccess
 
     public SqlDataAccess(IConfiguration config)
     {
-        _connectionString = config.GetConnectionString("SGRNetGuard")
-            ?? throw new InvalidOperationException("Thiếu ConnectionStrings:SGRNetGuard trong appsettings.json");
+        var databaseUrl = config["DATABASE_URL"];
+        var configuredConnectionString = config.GetConnectionString("SGRNetGuard");
+        _connectionString = ConvertRenderDatabaseUrl(databaseUrl)
+            ?? configuredConnectionString
+            ?? throw new InvalidOperationException("Thiếu ConnectionStrings:SGRNetGuard hoặc DATABASE_URL");
     }
 
-    private SqlConnection CreateConnection() => new(_connectionString);
+    private static string? ConvertRenderDatabaseUrl(string? databaseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(databaseUrl))
+            return null;
+
+        if (!databaseUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+            !databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+            return databaseUrl;
+
+        var uri = new Uri(databaseUrl);
+        var userInfo = uri.UserInfo.Split(':', 2);
+        if (userInfo.Length != 2)
+            throw new InvalidOperationException("DATABASE_URL PostgreSQL thiếu username hoặc password");
+
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = uri.Host,
+            Port = uri.IsDefaultPort ? 5432 : uri.Port,
+            Username = Uri.UnescapeDataString(userInfo[0]),
+            Password = Uri.UnescapeDataString(userInfo[1]),
+            Database = uri.AbsolutePath.TrimStart('/'),
+            SslMode = SslMode.Require
+        };
+
+        return builder.ConnectionString;
+    }
+
+    private NpgsqlConnection CreateConnection() => new(_connectionString);
 
     private static Guid ResolveDeviceId(string? deviceId, string? deviceName, string? macAddress)
     {
@@ -61,21 +91,21 @@ public class SqlDataAccess
         using var conn = CreateConnection();
 
         var sites = (await conn.QueryAsync<SiteDto>(
-            @"SELECT Region, SiteName AS Site, Subnet, ItAccount AS IT, TeamsAccount AS Teams
-              FROM dbo.Sites WHERE IsActive = 1 ORDER BY Region, SiteName")).ToList();
+              @"SELECT Region, SiteName AS Site, Subnet, ItAccount AS IT, TeamsAccount AS Teams
+              FROM public.Sites WHERE IsActive = TRUE ORDER BY Region, SiteName")).ToList();
 
         var dnsRows = await conn.QueryAsync<(string Region, string DnsServer)>(
-            "SELECT Region, DnsServer FROM dbo.RegionDnsServers");
+            "SELECT Region, DnsServer FROM public.RegionDnsServers");
 
         var dnsByRegion = dnsRows
             .GroupBy(r => r.Region)
             .ToDictionary(g => g.Key, g => g.Select(x => x.DnsServer).ToList());
 
         var ssid = await conn.ExecuteScalarAsync<string>(
-            "SELECT [Value] FROM dbo.AppSettings WHERE [Key] = 'ValidSsid'") ?? "SGR-OFFICE";
+            "SELECT Value FROM public.AppSettings WHERE Key = 'ValidSsid'") ?? "SGR-OFFICE";
 
         var version = await conn.ExecuteScalarAsync<DateTime?>(
-            "SELECT MAX(UpdatedAtUtc) FROM dbo.Sites");
+            "SELECT MAX(UpdatedAtUtc) FROM public.Sites");
 
         return new RemoteConfigDto
         {
@@ -92,14 +122,14 @@ public class SqlDataAccess
     {
         using var conn = CreateConnection();
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.PerformanceWarnings (DeviceName, SiteName, Region, MetricType, MetricValue)
-              VALUES (@DeviceName, @SiteName, @Region, @MetricType, @MetricValue)",
+                        @"INSERT INTO public.PerformanceWarnings (DeviceName, SiteName, Region, MetricType, MetricValue)
+                            VALUES (@DeviceName, @SiteName, @Region, @MetricType, @MetricValue)",
             dto);
 
         await EnsureWarningAlertAsync(conn, dto);
     }
 
-    private async Task EnsureWarningAlertAsync(SqlConnection conn, PerformanceWarningDto dto)
+    private async Task EnsureWarningAlertAsync(NpgsqlConnection conn, PerformanceWarningDto dto)
     {
         var deviceName = dto.DeviceName;
         var title = dto.MetricType switch
@@ -110,9 +140,9 @@ public class SqlDataAccess
         };
 
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.Alerts (DeviceId, AlertType, Severity, Title, Message, IsAcknowledged, CreatedAt)
-              SELECT DeviceId, @AlertType, @Severity, @Title, @Message, 0, SYSUTCDATETIME()
-              FROM dbo.Devices
+            @"INSERT INTO public.Alerts (DeviceId, AlertType, Severity, Title, Message, IsAcknowledged, CreatedAt)
+              SELECT DeviceId, @AlertType, @Severity, @Title, @Message, FALSE, CURRENT_TIMESTAMP
+              FROM public.Devices
               WHERE ComputerName = @DeviceName",
             new
             {
@@ -137,21 +167,17 @@ public class SqlDataAccess
         var effectiveIsInternal = ResolveIsInternal(dto.IsInternal, dto.LanIp, dto.PublicIp);
 
         await conn.ExecuteAsync(
-            @"MERGE dbo.Devices AS target
-              USING (SELECT @DeviceId AS DeviceId) AS src
-              ON target.DeviceId = src.DeviceId
-              WHEN MATCHED THEN UPDATE SET
-                  MACAddress = COALESCE(NULLIF(@MacAddress, ''), MACAddress),
-                  ComputerName = COALESCE(NULLIF(@ComputerName, ''), ComputerName),
-                  CurrentUser = COALESCE(NULLIF(@Username, ''), CurrentUser),
-                  CurrentDepartment = COALESCE(NULLIF(@Department, ''), CurrentDepartment),
-                  CurrentLocation = COALESCE(NULLIF(@Location, ''), CurrentLocation),
-                  OperatingSystem = COALESCE(NULLIF(@OperatingSystem, ''), OperatingSystem),
-                  LastSeen = SYSUTCDATETIME(),
-                  Status = CASE WHEN @IsInternal = 1 THEN 'Active' ELSE 'External' END
-              WHEN NOT MATCHED THEN
-                  INSERT (DeviceId, MACAddress, ComputerName, CurrentUser, CurrentDepartment, CurrentLocation, OperatingSystem, FirstSeen, LastSeen, Status)
-                  VALUES (@DeviceId, NULLIF(@MacAddress, ''), NULLIF(@ComputerName, ''), NULLIF(@Username, ''), NULLIF(@Department, ''), NULLIF(@Location, ''), NULLIF(@OperatingSystem, ''), SYSUTCDATETIME(), SYSUTCDATETIME(), CASE WHEN @IsInternal = 1 THEN 'Active' ELSE 'External' END);",
+            @"INSERT INTO public.Devices (DeviceId, MACAddress, ComputerName, CurrentUser, CurrentDepartment, CurrentLocation, OperatingSystem, FirstSeen, LastSeen, Status)
+              VALUES (@DeviceId, NULLIF(@MacAddress, ''), NULLIF(@ComputerName, ''), NULLIF(@Username, ''), NULLIF(@Department, ''), NULLIF(@Location, ''), NULLIF(@OperatingSystem, ''), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CASE WHEN @IsInternal THEN 'Active' ELSE 'External' END)
+              ON CONFLICT (DeviceId) DO UPDATE SET
+                  MACAddress = COALESCE(NULLIF(EXCLUDED.MACAddress, ''), public.Devices.MACAddress),
+                  ComputerName = COALESCE(NULLIF(EXCLUDED.ComputerName, ''), public.Devices.ComputerName),
+                  CurrentUser = COALESCE(NULLIF(EXCLUDED.CurrentUser, ''), public.Devices.CurrentUser),
+                  CurrentDepartment = COALESCE(NULLIF(EXCLUDED.CurrentDepartment, ''), public.Devices.CurrentDepartment),
+                  CurrentLocation = COALESCE(NULLIF(EXCLUDED.CurrentLocation, ''), public.Devices.CurrentLocation),
+                  OperatingSystem = COALESCE(NULLIF(EXCLUDED.OperatingSystem, ''), public.Devices.OperatingSystem),
+                  LastSeen = CURRENT_TIMESTAMP,
+                  Status = CASE WHEN @IsInternal THEN 'Active' ELSE 'External' END;",
             new
             {
                 DeviceId = resolvedDeviceId,
@@ -161,66 +187,13 @@ public class SqlDataAccess
                 Department = dto.Department,
                 Location = dto.Location,
                 OperatingSystem = dto.OperatingSystem,
-                IsInternal = effectiveIsInternal ? 1 : 0,
-                HasNetworkData = !string.IsNullOrWhiteSpace(dto.LanIp) || !string.IsNullOrWhiteSpace(dto.PublicIp) ? 1 : 0
+                IsInternal = effectiveIsInternal,
+                HasNetworkData = !string.IsNullOrWhiteSpace(dto.LanIp) || !string.IsNullOrWhiteSpace(dto.PublicIp)
             },
             transaction: tx);
 
         await conn.ExecuteAsync(
-            @"MERGE dbo.DeviceHeartbeats AS target
-              USING (SELECT @DeviceName AS DeviceName) AS src
-              ON target.DeviceName = src.DeviceName
-              WHEN MATCHED THEN UPDATE SET
-                  LastSiteName = COALESCE(NULLIF(@SiteName, ''), LastSiteName),
-                  LastRegion = CASE
-                      WHEN @IsInternal = 1 AND NULLIF(@Region, '') IS NOT NULL THEN @Region
-                      ELSE target.LastRegion
-                  END,
-                  LastInternalSeenUtc = CASE
-                      WHEN @HasNetworkData = 1 AND @IsInternal = 1 AND NULLIF(@Region, '') IS NOT NULL THEN SYSUTCDATETIME()
-                      ELSE target.LastInternalSeenUtc
-                  END,
-                  IsInternal = @IsInternal,
-                  AppVersion = @AppVersion,
-                  CpuPercent = @CpuPercent, RamPercent = @RamPercent, DiskPercent = @DiskPercent,
-                  NetworkLatencyMs = @NetworkLatencyMs,
-                  NetworkType = @NetworkType,
-                  WifiSignalDbm = CASE WHEN @NetworkType = 'WiFi' THEN @WifiSignalDbm ELSE NULL END,
-                  LanLinkSpeed = CASE WHEN @NetworkType = 'LAN' THEN NULLIF(@LanLinkSpeed, '') ELSE NULL END,
-                  AdJoined = COALESCE(@AdJoined, AdJoined),
-                  TrellixInstalled = COALESCE(@TrellixInstalled, TrellixInstalled),
-                  DesktopCentralInstalled = COALESCE(@DesktopCentralInstalled, DesktopCentralInstalled),
-                  LoggedInUser = COALESCE(NULLIF(@LoggedInUser, ''), LoggedInUser),
-                  LanIp = COALESCE(NULLIF(@LanIp, ''), LanIp),
-                  PublicIp = COALESCE(NULLIF(@PublicIp, ''), PublicIp),
-                  MacAddress = COALESCE(NULLIF(@MacAddress, ''), MacAddress),
-                  Domain = COALESCE(NULLIF(@Domain, ''), Domain),
-                  WindowsVersion = COALESCE(NULLIF(@WindowsVersion, ''), WindowsVersion),
-                  SerialNumber = COALESCE(NULLIF(@SerialNumber, ''), SerialNumber),
-                  CpuModel = COALESCE(NULLIF(@CpuModel, ''), CpuModel),
-                  RamTotal = COALESCE(NULLIF(@RamTotal, ''), RamTotal),
-                  DiskTotal = COALESCE(NULLIF(@DiskTotal, ''), DiskTotal),
-                  Mainboard = COALESCE(NULLIF(@Mainboard, ''), Mainboard),
-                  Uptime = COALESCE(NULLIF(@Uptime, ''), Uptime),
-                  DetailUpdatedUtc = CASE
-                      WHEN NULLIF(@LoggedInUser, '') IS NOT NULL
-                        OR NULLIF(@LanIp, '') IS NOT NULL
-                        OR NULLIF(@PublicIp, '') IS NOT NULL
-                        OR NULLIF(@MacAddress, '') IS NOT NULL
-                        OR NULLIF(@Domain, '') IS NOT NULL
-                        OR NULLIF(@WindowsVersion, '') IS NOT NULL
-                        OR NULLIF(@SerialNumber, '') IS NOT NULL
-                        OR NULLIF(@CpuModel, '') IS NOT NULL
-                        OR NULLIF(@RamTotal, '') IS NOT NULL
-                        OR NULLIF(@DiskTotal, '') IS NOT NULL
-                        OR NULLIF(@Mainboard, '') IS NOT NULL
-                        OR NULLIF(@Uptime, '') IS NOT NULL
-                      THEN SYSUTCDATETIME()
-                      ELSE DetailUpdatedUtc
-                  END,
-                  LastSeenUtc = SYSUTCDATETIME()
-              WHEN NOT MATCHED THEN
-                  INSERT (DeviceName, LastSiteName, LastRegion, LastInternalSeenUtc, IsInternal, AppVersion,
+            @"INSERT INTO public.DeviceHeartbeats (DeviceName, LastSiteName, LastRegion, LastInternalSeenUtc, IsInternal, AppVersion,
                           CpuPercent, RamPercent, DiskPercent, NetworkLatencyMs,
                           NetworkType, WifiSignalDbm, LanLinkSpeed,
                           AdJoined, TrellixInstalled, DesktopCentralInstalled,
@@ -228,15 +201,15 @@ public class SqlDataAccess
                           Domain, WindowsVersion, SerialNumber, CpuModel,
                           RamTotal, DiskTotal, Mainboard, Uptime, DetailUpdatedUtc, LastSeenUtc)
                   VALUES (@DeviceName, @SiteName,
-                      CASE WHEN @IsInternal = 1 AND NULLIF(@Region, '') IS NOT NULL THEN @Region ELSE NULL END,
-                      CASE WHEN @IsInternal = 1 AND NULLIF(@Region, '') IS NOT NULL THEN SYSUTCDATETIME() ELSE NULL END,
+                      CASE WHEN @IsInternal AND NULLIF(@Region, '') IS NOT NULL THEN @Region ELSE NULL END,
+                      CASE WHEN @IsInternal AND NULLIF(@Region, '') IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END,
                       @IsInternal, @AppVersion,
                           @CpuPercent, @RamPercent, @DiskPercent, @NetworkLatencyMs,
                           @NetworkType,
                           CASE WHEN @NetworkType = 'WiFi' THEN @WifiSignalDbm ELSE NULL END,
                           CASE WHEN @NetworkType = 'LAN' THEN NULLIF(@LanLinkSpeed, '') ELSE NULL END,
                           @AdJoined, @TrellixInstalled, @DesktopCentralInstalled,
-                          NULLIF(@LoggedInUser, ''), NULLIF(@LanIp, ''), NULLIF(@PublicIp, ''), NULLIF(@MacAddress, ''),
+                          NULLIF(@LoggedInUser, ''), NULLIF(@LanIp, ''), NULLIF(@PublicIp, '') , NULLIF(@MacAddress, ''),
                           NULLIF(@Domain, ''), NULLIF(@WindowsVersion, ''), NULLIF(@SerialNumber, ''), NULLIF(@CpuModel, ''),
                           NULLIF(@RamTotal, ''), NULLIF(@DiskTotal, ''), NULLIF(@Mainboard, ''), NULLIF(@Uptime, ''),
                           CASE
@@ -252,17 +225,47 @@ public class SqlDataAccess
                                 OR NULLIF(@DiskTotal, '') IS NOT NULL
                                 OR NULLIF(@Mainboard, '') IS NOT NULL
                                 OR NULLIF(@Uptime, '') IS NOT NULL
-                              THEN SYSUTCDATETIME()
+                              THEN CURRENT_TIMESTAMP
                               ELSE NULL
                           END,
-                          SYSUTCDATETIME());",
+                          CURRENT_TIMESTAMP)
+                  ON CONFLICT (DeviceName) DO UPDATE SET
+                      LastSiteName = COALESCE(NULLIF(EXCLUDED.LastSiteName, ''), public.DeviceHeartbeats.LastSiteName),
+                      LastRegion = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN EXCLUDED.LastRegion ELSE public.DeviceHeartbeats.LastRegion END,
+                      LastInternalSeenUtc = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN CURRENT_TIMESTAMP ELSE public.DeviceHeartbeats.LastInternalSeenUtc END,
+                      IsInternal = EXCLUDED.IsInternal,
+                      AppVersion = EXCLUDED.AppVersion,
+                      CpuPercent = EXCLUDED.CpuPercent,
+                      RamPercent = EXCLUDED.RamPercent,
+                      DiskPercent = EXCLUDED.DiskPercent,
+                      NetworkLatencyMs = EXCLUDED.NetworkLatencyMs,
+                      NetworkType = EXCLUDED.NetworkType,
+                      WifiSignalDbm = EXCLUDED.WifiSignalDbm,
+                      LanLinkSpeed = EXCLUDED.LanLinkSpeed,
+                      AdJoined = COALESCE(EXCLUDED.AdJoined, public.DeviceHeartbeats.AdJoined),
+                      TrellixInstalled = COALESCE(EXCLUDED.TrellixInstalled, public.DeviceHeartbeats.TrellixInstalled),
+                      DesktopCentralInstalled = COALESCE(EXCLUDED.DesktopCentralInstalled, public.DeviceHeartbeats.DesktopCentralInstalled),
+                      LoggedInUser = COALESCE(NULLIF(EXCLUDED.LoggedInUser, ''), public.DeviceHeartbeats.LoggedInUser),
+                      LanIp = COALESCE(NULLIF(EXCLUDED.LanIp, ''), public.DeviceHeartbeats.LanIp),
+                      PublicIp = COALESCE(NULLIF(EXCLUDED.PublicIp, ''), public.DeviceHeartbeats.PublicIp),
+                      MacAddress = COALESCE(NULLIF(EXCLUDED.MacAddress, ''), public.DeviceHeartbeats.MacAddress),
+                      Domain = COALESCE(NULLIF(EXCLUDED.Domain, ''), public.DeviceHeartbeats.Domain),
+                      WindowsVersion = COALESCE(NULLIF(EXCLUDED.WindowsVersion, ''), public.DeviceHeartbeats.WindowsVersion),
+                      SerialNumber = COALESCE(NULLIF(EXCLUDED.SerialNumber, ''), public.DeviceHeartbeats.SerialNumber),
+                      CpuModel = COALESCE(NULLIF(EXCLUDED.CpuModel, ''), public.DeviceHeartbeats.CpuModel),
+                      RamTotal = COALESCE(NULLIF(EXCLUDED.RamTotal, ''), public.DeviceHeartbeats.RamTotal),
+                      DiskTotal = COALESCE(NULLIF(EXCLUDED.DiskTotal, ''), public.DeviceHeartbeats.DiskTotal),
+                      Mainboard = COALESCE(NULLIF(EXCLUDED.Mainboard, ''), public.DeviceHeartbeats.Mainboard),
+                      Uptime = COALESCE(NULLIF(EXCLUDED.Uptime, ''), public.DeviceHeartbeats.Uptime),
+                      DetailUpdatedUtc = COALESCE(EXCLUDED.DetailUpdatedUtc, public.DeviceHeartbeats.DetailUpdatedUtc),
+                      LastSeenUtc = CURRENT_TIMESTAMP;",
             new
             {
                 DeviceName = effectiveDeviceName,
                 SiteName = dto.SiteName,
                 Region = dto.Region,
-                IsInternal = effectiveIsInternal ? 1 : 0,
-                HasNetworkData = !string.IsNullOrWhiteSpace(dto.LanIp) || !string.IsNullOrWhiteSpace(dto.PublicIp) ? 1 : 0,
+                IsInternal = effectiveIsInternal,
+                HasNetworkData = !string.IsNullOrWhiteSpace(dto.LanIp) || !string.IsNullOrWhiteSpace(dto.PublicIp),
                 AppVersion = dto.AppVersion,
                 CpuPercent = dto.CpuPercent,
                 RamPercent = dto.RamPercent,
@@ -294,11 +297,11 @@ public class SqlDataAccess
         tx.Commit();
     }
 
-    private async Task UpdateDeviceHistoryAsync(SqlConnection conn, SqlTransaction tx, Guid deviceId, HeartbeatDto dto)
+    private async Task UpdateDeviceHistoryAsync(NpgsqlConnection conn, NpgsqlTransaction tx, Guid deviceId, HeartbeatDto dto)
     {
         var current = await conn.QuerySingleOrDefaultAsync<dynamic>(
-            @"SELECT TOP 1 ComputerName, CurrentUser AS Username, CurrentDepartment AS Department, CurrentLocation AS Location, MACAddress
-              FROM dbo.Devices
+                        @"SELECT ComputerName, CurrentUser AS Username, CurrentDepartment AS Department, CurrentLocation AS Location, MACAddress
+                            FROM public.Devices
               WHERE DeviceId = @DeviceId",
             new { DeviceId = deviceId },
             transaction: tx);
@@ -323,8 +326,8 @@ public class SqlDataAccess
         if (!changed) return;
 
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.DeviceHistory (DeviceId, MACAddress, ComputerName, Username, Department, Location, Timestamp, ChangeType)
-              VALUES (@DeviceId, @MacAddress, @ComputerName, @Username, @Department, @Location, SYSUTCDATETIME(), 'DEVICE_INFO_CHANGED')",
+                        @"INSERT INTO public.DeviceHistory (DeviceId, MACAddress, ComputerName, Username, Department, Location, Timestamp, ChangeType)
+                            VALUES (@DeviceId, @MacAddress, @ComputerName, @Username, @Department, @Location, CURRENT_TIMESTAMP, 'DEVICE_INFO_CHANGED')",
             new
             {
                 DeviceId = deviceId,
@@ -343,8 +346,8 @@ public class SqlDataAccess
         var deviceId = ResolveDeviceId(dto.DeviceId, dto.DeviceName, dto.MacAddress);
 
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.NetworkStatus (DeviceId, ConnectionType, AdapterName, IPAddress, MACAddress, SSID, SignalStrengthDbm, LinkSpeedMbps, DownloadMbps, UploadMbps, Timestamp)
-              VALUES (@DeviceId, @ConnectionType, @AdapterName, @IPAddress, @MacAddress, @SSID, @SignalStrengthDbm, @LinkSpeedMbps, @DownloadMbps, @UploadMbps, SYSUTCDATETIME())",
+                        @"INSERT INTO public.NetworkStatus (DeviceId, ConnectionType, AdapterName, IPAddress, MACAddress, SSID, SignalStrengthDbm, LinkSpeedMbps, DownloadMbps, UploadMbps, Timestamp)
+                            VALUES (@DeviceId, @ConnectionType, @AdapterName, @IPAddress, @MacAddress, @SSID, @SignalStrengthDbm, @LinkSpeedMbps, @DownloadMbps, @UploadMbps, CURRENT_TIMESTAMP)",
             new
             {
                 DeviceId = deviceId,
@@ -366,8 +369,8 @@ public class SqlDataAccess
         var deviceId = ResolveDeviceId(dto.DeviceId, dto.DeviceName, null);
 
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.PerformanceLogs (DeviceId, CPUUsage, RAMUsage, DiskUsage, DiskRead, DiskWrite, DiskIO, TopProcess, Timestamp)
-              VALUES (@DeviceId, @CpuUsage, @RamUsage, @DiskUsage, @DiskRead, @DiskWrite, @DiskIO, @TopProcess, SYSUTCDATETIME())",
+                        @"INSERT INTO public.PerformanceLogs (DeviceId, CPUUsage, RAMUsage, DiskUsage, DiskRead, DiskWrite, DiskIO, TopProcess, Timestamp)
+                            VALUES (@DeviceId, @CpuUsage, @RamUsage, @DiskUsage, @DiskRead, @DiskWrite, @DiskIO, @TopProcess, CURRENT_TIMESTAMP)",
             new
             {
                 DeviceId = deviceId,
@@ -387,8 +390,8 @@ public class SqlDataAccess
         var deviceId = ResolveDeviceId(dto.DeviceId, dto.DeviceName, null);
 
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.ComplianceStatus (DeviceId, Antivirus, Firewall, WindowsUpdate, BitLocker, PasswordPolicy, EndpointProtection, OverallStatus, Timestamp)
-              VALUES (@DeviceId, @Antivirus, @Firewall, @WindowsUpdate, @BitLocker, @PasswordPolicy, @EndpointProtection, @OverallStatus, SYSUTCDATETIME())",
+                        @"INSERT INTO public.ComplianceStatus (DeviceId, Antivirus, Firewall, WindowsUpdate, BitLocker, PasswordPolicy, EndpointProtection, OverallStatus, Timestamp)
+                            VALUES (@DeviceId, @Antivirus, @Firewall, @WindowsUpdate, @BitLocker, @PasswordPolicy, @EndpointProtection, @OverallStatus, CURRENT_TIMESTAMP)",
             new
             {
                 DeviceId = deviceId,
@@ -408,18 +411,15 @@ public class SqlDataAccess
 
         // Try to find existing device by ComputerName (case-insensitive) using the Devices table.
         var existingDeviceId = await conn.ExecuteScalarAsync<Guid?>(
-            @"SELECT TOP 1 DeviceId FROM dbo.Devices WHERE LOWER(ComputerName) = LOWER(@DeviceName) ORDER BY LastSeen DESC",
+            @"SELECT DeviceId FROM public.Devices WHERE LOWER(ComputerName) = LOWER(@DeviceName) ORDER BY LastSeen DESC LIMIT 1",
             new { DeviceName = dto.DeviceName });
 
         var deviceId = existingDeviceId ?? ResolveDeviceId(dto.DeviceId, dto.DeviceName, null);
 
         await conn.ExecuteAsync(
-            @"MERGE dbo.SoftwareInventory AS target
-              USING (SELECT @DeviceId AS DeviceId, @SoftwareName AS SoftwareName) AS src
-              ON target.DeviceId = src.DeviceId AND target.SoftwareName = src.SoftwareName
-              WHEN MATCHED THEN UPDATE SET Version = COALESCE(NULLIF(@Version, ''), Version), Publisher = COALESCE(NULLIF(@Publisher, ''), Publisher), InstallDate = COALESCE(@InstallDate, InstallDate), LastDetected = SYSUTCDATETIME()
-              WHEN NOT MATCHED THEN INSERT (DeviceId, SoftwareName, Version, Publisher, InstallDate, FirstDetected, LastDetected)
-              VALUES (@DeviceId, @SoftwareName, NULLIF(@Version, ''), NULLIF(@Publisher, ''), @InstallDate, SYSUTCDATETIME(), SYSUTCDATETIME());",
+                        @"INSERT INTO public.SoftwareInventory (DeviceId, SoftwareName, Version, Publisher, InstallDate, FirstDetected, LastDetected)
+                            VALUES (@DeviceId, @SoftwareName, NULLIF(@Version, ''), NULLIF(@Publisher, ''), @InstallDate, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            ON CONFLICT (DeviceId, SoftwareName) DO UPDATE SET Version = COALESCE(NULLIF(EXCLUDED.Version, ''), public.SoftwareInventory.Version), Publisher = COALESCE(NULLIF(EXCLUDED.Publisher, ''), public.SoftwareInventory.Publisher), InstallDate = COALESCE(EXCLUDED.InstallDate, public.SoftwareInventory.InstallDate), LastDetected = CURRENT_TIMESTAMP;",
             new
             {
                 DeviceId = deviceId,
@@ -446,7 +446,7 @@ public class SqlDataAccess
             {
                 var deviceName = grp.Key;
                 var existingDeviceId = await conn.ExecuteScalarAsync<Guid?>(
-                    @"SELECT TOP 1 DeviceId FROM dbo.Devices WHERE LOWER(ComputerName) = LOWER(@DeviceName) ORDER BY LastSeen DESC",
+                    @"SELECT DeviceId FROM public.Devices WHERE LOWER(ComputerName) = LOWER(@DeviceName) ORDER BY LastSeen DESC LIMIT 1",
                     new { DeviceName = deviceName }, transaction: tx);
 
                 Guid deviceId = existingDeviceId ?? ResolveDeviceId(null, deviceName, null);
@@ -454,12 +454,9 @@ public class SqlDataAccess
                 foreach (var item in grp)
                 {
                     await conn.ExecuteAsync(
-                        @"MERGE dbo.SoftwareInventory AS target
-                          USING (SELECT @DeviceId AS DeviceId, @SoftwareName AS SoftwareName) AS src
-                          ON target.DeviceId = src.DeviceId AND target.SoftwareName = src.SoftwareName
-                          WHEN MATCHED THEN UPDATE SET Version = COALESCE(NULLIF(@Version, ''), Version), Publisher = COALESCE(NULLIF(@Publisher, ''), Publisher), InstallDate = COALESCE(@InstallDate, InstallDate), LastDetected = SYSUTCDATETIME()
-                          WHEN NOT MATCHED THEN INSERT (DeviceId, SoftwareName, Version, Publisher, InstallDate, FirstDetected, LastDetected)
-                          VALUES (@DeviceId, @SoftwareName, NULLIF(@Version, ''), NULLIF(@Publisher, ''), @InstallDate, SYSUTCDATETIME(), SYSUTCDATETIME());",
+                                                @"INSERT INTO public.SoftwareInventory (DeviceId, SoftwareName, Version, Publisher, InstallDate, FirstDetected, LastDetected)
+                                                    VALUES (@DeviceId, @SoftwareName, NULLIF(@Version, ''), NULLIF(@Publisher, ''), @InstallDate, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                                    ON CONFLICT (DeviceId, SoftwareName) DO UPDATE SET Version = COALESCE(NULLIF(EXCLUDED.Version, ''), public.SoftwareInventory.Version), Publisher = COALESCE(NULLIF(EXCLUDED.Publisher, ''), public.SoftwareInventory.Publisher), InstallDate = COALESCE(EXCLUDED.InstallDate, public.SoftwareInventory.InstallDate), LastDetected = CURRENT_TIMESTAMP;",
                         new
                         {
                             DeviceId = deviceId,
@@ -497,11 +494,11 @@ public class SqlDataAccess
             || string.Equals(action, "hide", StringComparison.OrdinalIgnoreCase);
 
         await conn.ExecuteAsync(
-            @"UPDATE dbo.Devices
+            @"UPDATE public.Devices
               SET NetworkWarningDisabled = @DisableWarning,
-                  NetworkWarningDisabledAt = CASE WHEN @DisableWarning = 1 THEN SYSUTCDATETIME() ELSE NULL END
+                  NetworkWarningDisabledAt = CASE WHEN @DisableWarning THEN CURRENT_TIMESTAMP ELSE NULL END
               WHERE DeviceId = @DeviceId",
-            new { DeviceId = deviceId, DisableWarning = disableWarning ? 1 : 0 });
+            new { DeviceId = deviceId, DisableWarning = disableWarning });
     }
 
     public async Task<AgentStatusDto?> GetAgentStatusAsync(string? deviceNameOrId, decimal cpuWarningPercent, decimal ramWarningPercent, decimal diskWarningPercent, decimal diskCriticalPercent, int diskIoWarning)
@@ -512,32 +509,33 @@ public class SqlDataAccess
         if (Guid.TryParse(deviceNameOrId, out var deviceId)) parsedDeviceId = deviceId;
 
         var device = await conn.QuerySingleOrDefaultAsync<(Guid DeviceId, string DeviceName, bool? NetworkWarningDisabled, string? Status, string? CurrentUser)>(
-            @"SELECT TOP 1 DeviceId, ComputerName AS DeviceName, NetworkWarningDisabled, Status, CurrentUser
-              FROM dbo.Devices
+                        @"SELECT DeviceId, ComputerName AS DeviceName, NetworkWarningDisabled, Status, CurrentUser
+              FROM public.Devices
               WHERE (@DeviceId IS NOT NULL AND DeviceId = @DeviceId)
                  OR (@DeviceName IS NOT NULL AND ComputerName = @DeviceName)
-              ORDER BY LastSeen DESC",
+                            ORDER BY LastSeen DESC
+                            LIMIT 1",
             new { DeviceId = parsedDeviceId, DeviceName = deviceNameOrId });
 
         if (device == default) return null;
 
         var network = await conn.QuerySingleOrDefaultAsync<dynamic>(
-            @"SELECT TOP 1 ConnectionType, SSID, SignalStrengthDbm
-              FROM dbo.NetworkStatus
+                @"SELECT ConnectionType, SSID, SignalStrengthDbm
+              FROM public.NetworkStatus
               WHERE DeviceId = @DeviceId
               ORDER BY Timestamp DESC",
             new { DeviceId = device.DeviceId });
 
         var performance = await conn.QuerySingleOrDefaultAsync<dynamic>(
-            @"SELECT TOP 1 CPUUsage, RAMUsage, DiskUsage, DiskIO
-              FROM dbo.PerformanceLogs
+                @"SELECT CPUUsage, RAMUsage, DiskUsage, DiskIO
+              FROM public.PerformanceLogs
               WHERE DeviceId = @DeviceId
               ORDER BY Timestamp DESC",
             new { DeviceId = device.DeviceId });
 
         var complianceStatus = await conn.QuerySingleOrDefaultAsync<string?>(
-            @"SELECT TOP 1 OverallStatus
-              FROM dbo.ComplianceStatus
+                @"SELECT OverallStatus
+              FROM public.ComplianceStatus
               WHERE DeviceId = @DeviceId
               ORDER BY Timestamp DESC",
             new { DeviceId = device.DeviceId });
@@ -596,12 +594,12 @@ public class SqlDataAccess
             @"WITH LatestHeartbeat AS (
                    SELECT h.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC, h.DeviceName) AS RowNum
-                   FROM dbo.DeviceHeartbeats h
+                   FROM public.DeviceHeartbeats h
               ),
               LatestDevice AS (
                    SELECT d.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
-                   FROM dbo.Devices d
+                   FROM public.Devices d
               )
               SELECT h.DeviceName,
                      d.DeviceId,
@@ -610,7 +608,7 @@ public class SqlDataAccess
                      d.CurrentDepartment,
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
-                     CASE WHEN h.IsInternal = 1 THEN h.LastSiteName ELSE NULL END AS LastSiteName,
+                     CASE WHEN h.IsInternal THEN h.LastSiteName ELSE NULL END AS LastSiteName,
                      h.LastRegion,
                      h.IsInternal,
                      h.CpuPercent,
@@ -625,17 +623,17 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                    CASE WHEN h.LastSeenUtc >= DATEADD(MINUTE, -2, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS IsOnline,
-                     (SELECT COUNT(*) FROM dbo.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CAST(SYSUTCDATETIME() AS DATE)) AS WarningsToday,
+                    CASE WHEN h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '2 minutes' THEN TRUE ELSE FALSE END AS IsOnline,
+                     (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
-                     CASE WHEN COALESCE(h.IsInternal, 0) = 1 THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
+                     CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
               FROM LatestHeartbeat h
               LEFT JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
               LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
                       SELECT DeviceId, OverallStatus, ROW_NUMBER() OVER (PARTITION BY DeviceId ORDER BY Timestamp DESC) AS RowNum
-                      FROM dbo.ComplianceStatus
+                      FROM public.ComplianceStatus
                   ) x
                   WHERE RowNum = 1
               ) c ON c.DeviceId = d.DeviceId
@@ -648,8 +646,8 @@ public class SqlDataAccess
         using var conn = CreateConnection();
         return await conn.QueryAsync<DeviceReportWarningDto>(
             @"SELECT DeviceName, MetricType, MetricValue, WarnedAtUtc, SiteName, Region
-              FROM dbo.PerformanceWarnings
-              WHERE WarnedAtUtc >= CAST(SYSUTCDATETIME() AS DATE)
+              FROM public.PerformanceWarnings
+              WHERE WarnedAtUtc >= CURRENT_DATE
               ORDER BY WarnedAtUtc DESC");
     }
 
@@ -658,7 +656,7 @@ public class SqlDataAccess
     public async Task<IEnumerable<dynamic>> GetWeeklyReportAsync()
     {
         using var conn = CreateConnection();
-        return await conn.QueryAsync("SELECT * FROM dbo.vw_WeeklyPerformanceReport ORDER BY TotalWarningCount DESC");
+        return await conn.QueryAsync("SELECT * FROM public.vw_WeeklyPerformanceReport ORDER BY TotalWarningCount DESC");
     }
 
     public async Task<DeviceReportDataDto> GetDeviceReportAsync(string deviceName)
@@ -669,23 +667,23 @@ public class SqlDataAccess
             @"WITH LatestHeartbeat AS (
                    SELECT h.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC, h.DeviceName) AS RowNum
-                   FROM dbo.DeviceHeartbeats h
+                   FROM public.DeviceHeartbeats h
                    WHERE LOWER(h.DeviceName) = LOWER(@DeviceName)
                ),
                LatestDevice AS (
                    SELECT d.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
-                   FROM dbo.Devices d
+                   FROM public.Devices d
                    WHERE LOWER(d.ComputerName) = LOWER(@DeviceName)
                )
-               SELECT TOP 1 h.DeviceName,
+               SELECT h.DeviceName,
                      d.DeviceId,
                      d.MACAddress,
                      d.CurrentUser,
                      d.CurrentDepartment,
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
-                     CASE WHEN h.IsInternal = 1 THEN h.LastSiteName ELSE NULL END AS LastSiteName,
+                     CASE WHEN h.IsInternal THEN h.LastSiteName ELSE NULL END AS LastSiteName,
                      h.LastRegion,
                      h.IsInternal,
                      h.CpuPercent,
@@ -700,29 +698,30 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                    CASE WHEN h.LastSeenUtc >= DATEADD(MINUTE, -2, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS IsOnline,
-                     (SELECT COUNT(*) FROM dbo.PerformanceWarnings w WHERE LOWER(w.DeviceName) = LOWER(@DeviceName) AND w.WarnedAtUtc >= CAST(SYSUTCDATETIME() AS DATE)) AS WarningsToday,
+                    h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '2 minutes' AS IsOnline,
+                     (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE LOWER(w.DeviceName) = LOWER(@DeviceName) AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
-                     CASE WHEN COALESCE(h.IsInternal, 0) = 1 THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
+                     CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
               FROM LatestHeartbeat h
               LEFT JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
               LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
                       SELECT DeviceId, OverallStatus, ROW_NUMBER() OVER (PARTITION BY DeviceId ORDER BY Timestamp DESC) AS RowNum
-                      FROM dbo.ComplianceStatus
+                      FROM public.ComplianceStatus
                   ) x
                   WHERE RowNum = 1
               ) c ON c.DeviceId = d.DeviceId
               WHERE h.RowNum = 1
-              ORDER BY h.LastSeenUtc DESC",
+              ORDER BY h.LastSeenUtc DESC
+              LIMIT 1",
             new { DeviceName = deviceName });
 
         var warnings = (await conn.QueryAsync<DeviceReportWarningDto>(
             @"SELECT DeviceName, MetricType, MetricValue, WarnedAtUtc, SiteName, Region
-              FROM dbo.PerformanceWarnings
+              FROM public.PerformanceWarnings
               WHERE LOWER(DeviceName) = LOWER(@DeviceName)
-                AND WarnedAtUtc >= DATEADD(DAY, -7, SYSUTCDATETIME())
+                AND WarnedAtUtc >= CURRENT_TIMESTAMP - INTERVAL '7 days'
               ORDER BY WarnedAtUtc DESC",
             new { DeviceName = deviceName })).ToList();
 
@@ -742,13 +741,13 @@ public class SqlDataAccess
             ? @"WITH LatestHeartbeat AS (
                    SELECT h.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC, h.DeviceName) AS RowNum
-                   FROM dbo.DeviceHeartbeats h
-                   WHERE h.DeviceName IN @DeviceNames
+                   FROM public.DeviceHeartbeats h
+                   WHERE LOWER(h.DeviceName) = ANY(@DeviceNames)
                ),
                LatestDevice AS (
                    SELECT d.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
-                   FROM dbo.Devices d
+                   FROM public.Devices d
                )
                SELECT h.DeviceName,
                      d.DeviceId,
@@ -757,7 +756,7 @@ public class SqlDataAccess
                      d.CurrentDepartment,
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
-                     CASE WHEN h.IsInternal = 1 THEN h.LastSiteName ELSE NULL END AS LastSiteName,
+                     CASE WHEN h.IsInternal THEN h.LastSiteName ELSE NULL END AS LastSiteName,
                      h.LastRegion,
                      h.IsInternal,
                      h.CpuPercent,
@@ -772,17 +771,17 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                     CASE WHEN h.LastSeenUtc >= DATEADD(MINUTE, -2, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS IsOnline,
-                     (SELECT COUNT(*) FROM dbo.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CAST(SYSUTCDATETIME() AS DATE)) AS WarningsToday,
+                     h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '2 minutes' AS IsOnline,
+                     (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
-                     CASE WHEN COALESCE(h.IsInternal, 0) = 1 THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
+                     CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
                FROM LatestHeartbeat h
                LEFT JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
                LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
                       SELECT DeviceId, OverallStatus, ROW_NUMBER() OVER (PARTITION BY DeviceId ORDER BY Timestamp DESC) AS RowNum
-                      FROM dbo.ComplianceStatus
+                      FROM public.ComplianceStatus
                   ) x
                   WHERE RowNum = 1
                ) c ON c.DeviceId = d.DeviceId
@@ -791,12 +790,12 @@ public class SqlDataAccess
             : @"WITH LatestHeartbeat AS (
                    SELECT h.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC, h.DeviceName) AS RowNum
-                   FROM dbo.DeviceHeartbeats h
+                   FROM public.DeviceHeartbeats h
                ),
                LatestDevice AS (
                    SELECT d.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
-                   FROM dbo.Devices d
+                   FROM public.Devices d
                )
                SELECT h.DeviceName,
                      d.DeviceId,
@@ -805,7 +804,7 @@ public class SqlDataAccess
                      d.CurrentDepartment,
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
-                     CASE WHEN h.IsInternal = 1 THEN h.LastSiteName ELSE NULL END AS LastSiteName,
+                     CASE WHEN h.IsInternal THEN h.LastSiteName ELSE NULL END AS LastSiteName,
                      h.LastRegion,
                      h.IsInternal,
                      h.CpuPercent,
@@ -820,17 +819,17 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                     CASE WHEN h.LastSeenUtc >= DATEADD(MINUTE, -2, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS IsOnline,
-                     (SELECT COUNT(*) FROM dbo.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CAST(SYSUTCDATETIME() AS DATE)) AS WarningsToday,
+                     h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '2 minutes' AS IsOnline,
+                     (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
-                     CASE WHEN COALESCE(h.IsInternal, 0) = 1 THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
+                     CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
                FROM LatestHeartbeat h
                LEFT JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
                LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
                       SELECT DeviceId, OverallStatus, ROW_NUMBER() OVER (PARTITION BY DeviceId ORDER BY Timestamp DESC) AS RowNum
-                      FROM dbo.ComplianceStatus
+                      FROM public.ComplianceStatus
                   ) x
                   WHERE RowNum = 1
                ) c ON c.DeviceId = d.DeviceId
@@ -839,17 +838,18 @@ public class SqlDataAccess
 
         var warningsSql = hasFilter
             ? @"SELECT DeviceName, MetricType, MetricValue, WarnedAtUtc, SiteName, Region
-                FROM dbo.PerformanceWarnings
-                WHERE DeviceName IN @DeviceNames
-                  AND WarnedAtUtc >= DATEADD(DAY, -7, SYSUTCDATETIME())
+                FROM public.PerformanceWarnings
+                WHERE LOWER(DeviceName) = ANY(@DeviceNames)
+                  AND WarnedAtUtc >= CURRENT_TIMESTAMP - INTERVAL '7 days'
                 ORDER BY DeviceName, WarnedAtUtc DESC"
             : @"SELECT DeviceName, MetricType, MetricValue, WarnedAtUtc, SiteName, Region
-                FROM dbo.PerformanceWarnings
-                WHERE WarnedAtUtc >= DATEADD(DAY, -7, SYSUTCDATETIME())
+                FROM public.PerformanceWarnings
+                WHERE WarnedAtUtc >= CURRENT_TIMESTAMP - INTERVAL '7 days'
                 ORDER BY DeviceName, WarnedAtUtc DESC";
 
-        var devices = (await conn.QueryAsync<DeviceDashboardDto>(devicesSql, new { DeviceNames = deviceNames })).ToList();
-        var warnings = (await conn.QueryAsync<DeviceReportWarningDto>(warningsSql, new { DeviceNames = deviceNames })).ToList();
+        var normalizedDeviceNames = deviceNames?.Select(name => name.ToLowerInvariant()).ToArray();
+        var devices = (await conn.QueryAsync<DeviceDashboardDto>(devicesSql, new { DeviceNames = normalizedDeviceNames })).ToList();
+        var warnings = (await conn.QueryAsync<DeviceReportWarningDto>(warningsSql, new { DeviceNames = normalizedDeviceNames })).ToList();
 
         return (devices, warnings);
     }
@@ -861,25 +861,23 @@ public class SqlDataAccess
             @"WITH LatestHeartbeat AS (
                    SELECT h.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC, h.DeviceName) AS RowNum
-                   FROM dbo.DeviceHeartbeats h
+                   FROM public.DeviceHeartbeats h
                ),
                LatestDevice AS (
                    SELECT d.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
-                   FROM dbo.Devices d
+                   FROM public.Devices d
                )
-               SELECT TOP 1
+               SELECT
                    d.ComputerName AS DeviceName,
                    d.DeviceId,
                    d.CurrentUser,
                    d.CurrentDepartment,
                    d.CurrentLocation,
-                   CASE WHEN COALESCE(h.IsInternal, 0) = 1 THEN 'Active' ELSE 'External' END AS CurrentStatus,
-                   d.NetworkWarningDisabled,
-                   d.MACAddress,
                    h.LoggedInUser,
                    h.LanIp,
                    h.PublicIp,
+                   d.MACAddress,
                    h.Domain,
                    h.WindowsVersion,
                    h.SerialNumber,
@@ -891,21 +889,29 @@ public class SqlDataAccess
                    h.AppVersion,
                    h.DetailUpdatedUtc,
                    h.LastSeenUtc,
-                   CASE WHEN COALESCE(h.IsInternal, 0) = 1 THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus,
-                CASE WHEN h.LastSeenUtc >= DATEADD(MINUTE, -2, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS IsOnline
+                   d.Status AS CurrentStatus,
+                   d.NetworkWarningDisabled,
+                   h.NetworkType,
+                   h.WifiSignalDbm,
+                   h.LanLinkSpeed,
+                   CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus,
+                   COALESCE(h.LastSeenUtc, d.LastSeen) >= CURRENT_TIMESTAMP - INTERVAL '2 minutes' AS IsOnline
                FROM LatestDevice d
                LEFT JOIN LatestHeartbeat h ON LOWER(h.DeviceName) = LOWER(d.ComputerName) AND h.RowNum = 1
                WHERE LOWER(d.ComputerName) = LOWER(@DeviceName)
-                 AND d.RowNum = 1",
+                 AND d.RowNum = 1
+               ORDER BY COALESCE(h.LastSeenUtc, d.LastSeen) DESC
+               LIMIT 1",
             new { DeviceName = deviceName });
 
         if (device == null) return null;
 
         var complianceStatus = await conn.QuerySingleOrDefaultAsync<string?>(
-            @"SELECT TOP 1 OverallStatus
-              FROM dbo.ComplianceStatus
+                        @"SELECT OverallStatus
+                            FROM public.ComplianceStatus
               WHERE DeviceId = @DeviceId
-              ORDER BY Timestamp DESC",
+                            ORDER BY Timestamp DESC
+                            LIMIT 1",
             new { DeviceId = device.DeviceId });
 
         device.ComplianceStatus = complianceStatus;
@@ -914,42 +920,27 @@ public class SqlDataAccess
 
     public async Task<List<SoftwareInventoryEntryDto>> GetSoftwareInventoryAsync(string deviceName)
     {
-        try
-        {
-            using var conn = CreateConnection();
-            await conn.OpenAsync();
+        using var conn = CreateConnection();
 
-            var deviceId = await conn.ExecuteScalarAsync<Guid?>(
-                @"WITH LatestDevice AS (
-                        SELECT d.*,
-                               ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
-                        FROM dbo.Devices d
-                    )
-                    SELECT TOP 1 DeviceId
-                    FROM LatestDevice
-                    WHERE LOWER(ComputerName) = LOWER(@DeviceName)
-                      AND RowNum = 1
-                    ORDER BY LastSeen DESC",
-                new { DeviceName = deviceName });
+        var deviceId = await conn.ExecuteScalarAsync<Guid?>(
+            @"SELECT DeviceId
+              FROM public.Devices
+              WHERE LOWER(ComputerName) = LOWER(@DeviceName)
+              ORDER BY LastSeen DESC
+              LIMIT 1",
+            new { DeviceName = deviceName });
 
-            if (deviceId is null)
-                return new List<SoftwareInventoryEntryDto>();
+        if (deviceId is null)
+            return new List<SoftwareInventoryEntryDto>();
 
-            return (await conn.QueryAsync<SoftwareInventoryEntryDto>(
-                @"SELECT s.SoftwareName, s.Version, s.Publisher, s.InstallDate,
-                         d.ComputerName AS DeviceName,
-                         CAST(s.DeviceId AS VARCHAR(36)) AS DeviceId
-                  FROM dbo.SoftwareInventory s
-                  INNER JOIN dbo.Devices d ON d.DeviceId = s.DeviceId
-                  WHERE s.DeviceId = @DeviceId
-                  ORDER BY s.SoftwareName",
-                new { DeviceId = deviceId })).ToList();
-        }
-        catch (Exception ex)
-        {
-            System.IO.File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "software_error.log"), 
-                $"{DateTime.UtcNow:O} - Error fetching software for {deviceName}: {ex.Message}\n{ex.StackTrace}\n");
-            throw;
-        }
+        return (await conn.QueryAsync<SoftwareInventoryEntryDto>(
+            @"SELECT s.SoftwareName, s.Version, s.Publisher, s.InstallDate,
+                     d.ComputerName AS DeviceName,
+                     CAST(s.DeviceId AS VARCHAR(36)) AS DeviceId
+              FROM public.SoftwareInventory s
+              INNER JOIN public.Devices d ON d.DeviceId = s.DeviceId
+              WHERE s.DeviceId = @DeviceId
+              ORDER BY s.SoftwareName",
+            new { DeviceId = deviceId })).ToList();
     }
 }

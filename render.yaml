@@ -12,6 +12,8 @@ services:
       - key: DashboardAuth__Username
         value: admin
       - key: DashboardAuth__Password
-        generateValue: true
+        value: Sun@2026
       - key: ConnectionStrings__SGRNetGuard
         sync: false
+      # Set this to Render PostgreSQL's DATABASE_URL, or use the equivalent
+      # ConnectionStrings__SGRNetGuard environment variable.

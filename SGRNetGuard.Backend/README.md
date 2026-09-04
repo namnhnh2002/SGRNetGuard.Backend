@@ -15,7 +15,7 @@ Module này giải quyết 2 việc bạn yêu cầu:
 [SGRNetGuard.Api — ASP.NET Core Web API, host trên IIS nội bộ]
         │
         ▼
-[SQL Server: database SGRNetGuard]
+[PostgreSQL: database sgrnetguard]
         ▲
         │ đọc dữ liệu 7 ngày gần nhất
         │
@@ -27,7 +27,7 @@ Module này giải quyết 2 việc bạn yêu cầu:
 
 ## 1. Setup Database
 
-Trên SQL Server, chạy lần lượt:
+Trên PostgreSQL, chạy bằng `psql`:
 ```
 Database/01_schema.sql              -- tạo database + toàn bộ bảng/view
 Database/02_seed_sites.sql          -- import 89 site đã có sẵn từ config.json cũ
@@ -57,7 +57,7 @@ dotnet restore
 dotnet publish -c Release -o C:\inetpub\SGRNetGuardApi
 ```
 
-- Sửa `appsettings.json` (connection string SQL Server thật) **trước khi publish**, hoặc sửa trực tiếp file `appsettings.json` trong thư mục đã publish.
+- Sửa `ConnectionStrings__SGRNetGuard` bằng chuỗi Npgsql (`Host=...;Port=5432;Database=...;Username=...;Password=...`) trước khi publish. Trên Render có thể dùng trực tiếp `DATABASE_URL` hoặc biến `ConnectionStrings__SGRNetGuard`.
 - Tạo Application Pool mới trên IIS, .NET CLR Version = "No Managed Code" (vì đây là ASP.NET Core, tự host Kestrel qua module ANCM).
 - Cài **ASP.NET Core Hosting Bundle** trên server IIS nếu chưa có: https://dotnet.microsoft.com/download/dotnet/8.0
 - Trỏ site IIS vào `C:\inetpub\SGRNetGuardApi`, port tùy bạn (mặc định code đang dùng `5080`, có thể đổi qua IIS binding).
@@ -125,7 +125,7 @@ Mỗi dòng = 1 máy tính, gồm:
 
 ## 6. Những điểm cần bạn xác nhận / chuẩn bị
 
-- Thông tin kết nối SQL Server thật (server, database quyền tạo, user/password).
+- Thông tin kết nối PostgreSQL thật (host, database, user/password).
 - Địa chỉ/port sẽ host Web API trên IIS nội bộ (để cập nhật `ApiBaseUrl` phía client).
 - Thông tin SMTP nội bộ để gửi email (host, port, tài khoản) — nếu công ty dùng Microsoft 365/Exchange Online thì cần app password hoặc SMTP relay riêng, không dùng trực tiếp mật khẩu tài khoản O365 thường.
 - Danh sách email/nhóm IT sẽ nhận báo cáo tuần.

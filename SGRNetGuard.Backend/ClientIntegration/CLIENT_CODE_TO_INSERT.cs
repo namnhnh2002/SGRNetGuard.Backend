@@ -13,7 +13,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 using System.Text.Json;
+using Microsoft.Win32;
 
 namespace SGRNetworkAgent.Services;
 
@@ -43,8 +45,10 @@ public class SiteRemoteDto
 public class RemoteConfigClient
 {
     private static readonly string ApiBaseUrl =
-        Environment.GetEnvironmentVariable("SGR_NETGUARD_API_URL")?.TrimEnd('/')
-        ?? "https://sgrnetguard-backend.onrender.com";
+        (Environment.GetEnvironmentVariable("SGR_NETGUARD_API_URL")?.TrimEnd('/'))
+        is { Length: > 0 } configuredUrl
+            ? configuredUrl
+            : "https://sgrnetguard-backend.onrender.com";
 
     private readonly HttpClient _http;
     private readonly string _cacheFilePath;
@@ -157,8 +161,10 @@ namespace SGRNetworkAgent.Services;
 public class TelemetryClient
 {
     private static readonly string ApiBaseUrl =
-        Environment.GetEnvironmentVariable("SGR_NETGUARD_API_URL")?.TrimEnd('/')
-        ?? "https://sgrnetguard-backend.onrender.com";
+        (Environment.GetEnvironmentVariable("SGR_NETGUARD_API_URL")?.TrimEnd('/'))
+        is { Length: > 0 } configuredUrl
+            ? configuredUrl
+            : "https://sgrnetguard-backend.onrender.com";
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
     /// <summary>
@@ -173,7 +179,7 @@ public class TelemetryClient
     {
         try
         {
-            await _http.PostAsJsonAsync($"{ApiBaseUrl}/api/telemetry/warning", new
+            using var response = await _http.PostAsJsonAsync($"{ApiBaseUrl}/api/telemetry/warning", new
             {
                 DeviceName = Environment.MachineName,
                 SiteName = siteName,
@@ -181,6 +187,7 @@ public class TelemetryClient
                 MetricType = metricType,   // "CPU" / "RAM" / "Disk"
                 MetricValue = metricValue
             });
+            response.EnsureSuccessStatusCode();
         }
         catch
         {
@@ -188,6 +195,120 @@ public class TelemetryClient
             // Có thể ghi vào Serilog nếu muốn theo dõi tỉ lệ gửi thất bại.
         }
     }
+
+    public async Task SendHeartbeatAsync(
+        string? siteName, string? region, bool isInternal,
+        decimal cpuPercent, decimal ramPercent, decimal diskPercent, int networkLatencyMs,
+        bool adJoined, bool trellixInstalled, bool desktopCentralInstalled)
+    {
+        try
+        {
+            using var response = await _http.PostAsJsonAsync($"{ApiBaseUrl}/api/heartbeat", new
+            {
+                DeviceName = Environment.MachineName,
+                ComputerName = Environment.MachineName,
+                SiteName = siteName,
+                Region = region,
+                IsInternal = isInternal,
+                AppVersion = typeof(TelemetryClient).Assembly.GetName().Version?.ToString(),
+                CpuPercent = cpuPercent,
+                RamPercent = ramPercent,
+                DiskPercent = diskPercent,
+                NetworkLatencyMs = networkLatencyMs,
+                LanIp = GetPrivateLanIp(),
+                PublicIp = await GetPublicIpAddressAsync(),
+                AdJoined = adJoined,
+                TrellixInstalled = trellixInstalled,
+                DesktopCentralInstalled = desktopCentralInstalled
+            });
+            response.EnsureSuccessStatusCode();
+        }
+        catch
+        {
+            // Telemetry must never interrupt the agent's main workflow.
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    public async Task SendInstalledSoftwareAsync()
+    {
+        try
+        {
+            var software = new List<object>();
+            var uninstallPaths = new[]
+            {
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+            foreach (var uninstallPath in uninstallPaths)
+            {
+                using var root = Registry.LocalMachine.OpenSubKey(uninstallPath);
+                if (root == null) continue;
+
+                foreach (var subKeyName in root.GetSubKeyNames())
+                {
+                    using var key = root.OpenSubKey(subKeyName);
+                    var softwareName = key?.GetValue("DisplayName") as string;
+                    if (string.IsNullOrWhiteSpace(softwareName)) continue;
+
+                    software.Add(new
+                    {
+                        DeviceName = Environment.MachineName,
+                        SoftwareName = softwareName.Trim(),
+                        Version = key?.GetValue("DisplayVersion") as string,
+                        Publisher = key?.GetValue("Publisher") as string,
+                        InstallDate = key?.GetValue("InstallDate") as string
+                    });
+                }
+            }
+
+            if (software.Count == 0) return;
+
+            using var response = await _http.PostAsJsonAsync(
+                $"{ApiBaseUrl}/api/software/inventory/bulk", software);
+            response.EnsureSuccessStatusCode();
+        }
+        catch
+        {
+            // Inventory failures are retried at the next scheduled sync.
+        }
+    }
+
+    private static string? GetPrivateLanIp()
+    {
+        return NetworkInterface.GetAllNetworkInterfaces()
+            .Where(network => network.OperationalStatus == OperationalStatus.Up)
+            .SelectMany(network => network.GetIPProperties().UnicastAddresses)
+            .Select(address => address.Address)
+            .Where(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
+            .Select(address => address.ToString())
+            .FirstOrDefault(ip => ip.StartsWith("10.", StringComparison.Ordinal) ||
+                                  ip.StartsWith("192.168.", StringComparison.Ordinal) ||
+                                  IsPrivate172Address(ip));
+    }
+
+    private static bool IsPrivate172Address(string ip)
+    {
+        var parts = ip.Split('.');
+        return parts.Length == 4 &&
+               int.TryParse(parts[1], out var secondOctet) &&
+               secondOctet is >= 16 and <= 31;
+    }
+
+    private static async Task<string?> GetPublicIpAddressAsync()
+    {
+        try
+        {
+            return (await _publicIpHttp.GetStringAsync("https://api.ipify.org?format=text")).Trim();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static readonly HttpClient _publicIpHttp = new() { Timeout = TimeSpan.FromSeconds(5) };
 }
 
 // Cách gọi: đặt ngay trong đoạn code hiển thị popup cảnh báo hiệu năng hiện tại của bạn, ví dụ:
