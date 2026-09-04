@@ -106,6 +106,16 @@ public class DeviceDashboardDto
     public string? ExternalNetworkStatus { get; set; }
 }
 
+public class DashboardSummaryDto
+{
+    public int TotalComputers { get; set; }
+    public Dictionary<string, int> Regions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public int Compliant { get; set; }
+    public int NonCompliant { get; set; }
+    public int InternalNetwork { get; set; }
+    public int ExternalNetwork { get; set; }
+}
+
 public class DeviceReportWarningDto
 {
     public string DeviceName { get; set; } = "";

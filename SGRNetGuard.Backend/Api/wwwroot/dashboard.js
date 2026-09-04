@@ -8,6 +8,8 @@ let allDevices = [];
 let isDemoMode = false;
 const selectedDeviceNames = new Set();
 let lastFilteredDeviceNames = [];
+let dashboardSummary = null;
+let summaryFilter = "all";
 
 const demoDevices = [
   {
@@ -152,6 +154,7 @@ async function loadDevices() {
     isDemoMode = false;
     renderTable();
     renderStats();
+    renderNetworkDashboard();
     setDemoBanner(false);
   } catch (err) {
     console.error("Không tải được danh sách máy:", err);
@@ -162,6 +165,82 @@ async function loadDevices() {
     setConnStatus(false);
     setDemoBanner(true);
   }
+}
+
+async function loadDashboardSummary() {
+  try {
+    const response = await fetch(`${API_BASE}/api/dashboard/summary`);
+    if (response.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    if (!response.ok) throw new Error(`Summary API returned ${response.status}`);
+    dashboardSummary = await response.json();
+    renderNetworkDashboard();
+  } catch (error) {
+    console.error("Không tải được tổng quan dashboard:", error);
+    dashboardSummary = null;
+    renderNetworkDashboard();
+  }
+}
+
+function setSummaryFilter(filter) {
+  summaryFilter = filter;
+  document.getElementById("searchBox").value = "";
+  document.getElementById("regionFilter").value = ["VMB", "VMT", "VMN"].includes(filter) ? filter : "";
+  document.getElementById("statusFilter").value = "";
+  renderTable();
+  renderNetworkDashboard();
+  document.getElementById("deviceTable").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderNetworkDashboard() {
+  const fallback = {
+    totalComputers: allDevices.length,
+    regions: {
+      VMB: allDevices.filter(device => device.lastRegion === "VMB").length,
+      VMT: allDevices.filter(device => device.lastRegion === "VMT").length,
+      VMN: allDevices.filter(device => device.lastRegion === "VMN").length
+    },
+    compliant: allDevices.filter(device => !isNonCompliant(device)).length,
+    nonCompliant: allDevices.filter(isNonCompliant).length,
+    internalNetwork: allDevices.filter(device => device.isInternal).length,
+    externalNetwork: allDevices.filter(device => !device.isInternal).length
+  };
+  const summary = dashboardSummary || fallback;
+  const regions = summary.regions || {};
+  const total = Number(summary.totalComputers || 0);
+  const values = {
+    VMB: Number(regions.VMB ?? regions.vmb ?? 0),
+    VMT: Number(regions.VMT ?? regions.vmt ?? 0),
+    VMN: Number(regions.VMN ?? regions.vmn ?? 0)
+  };
+
+  [
+    ["summaryTotal", total], ["cardTotal", total], ["summaryVmb", values.VMB], ["cardVmb", values.VMB],
+    ["summaryVmt", values.VMT], ["cardVmt", values.VMT], ["summaryVmn", values.VMN], ["cardVmn", values.VMN],
+    ["cardCompliant", Number(summary.compliant || 0)], ["cardNonCompliant", Number(summary.nonCompliant || 0)],
+    ["cardInternal", Number(summary.internalNetwork || 0)], ["cardExternal", Number(summary.externalNetwork || 0)]
+  ].forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  });
+
+  const circumference = 2 * Math.PI * 82;
+  let offset = 0;
+  ["VMB", "VMT", "VMN"].forEach(region => {
+    const segment = document.querySelector(`.donut-${region.toLowerCase()}`);
+    if (!segment) return;
+    const length = total > 0 ? (values[region] / total) * circumference : 0;
+    segment.style.strokeDasharray = `${length} ${circumference - length}`;
+    segment.style.strokeDashoffset = `${-offset}`;
+    offset += length;
+    segment.classList.toggle("is-selected", summaryFilter === region);
+  });
+
+  document.querySelectorAll("[data-summary-filter]").forEach(element => {
+    element.classList.toggle("is-selected", element.dataset.summaryFilter === summaryFilter);
+  });
 }
 
 function renderStats() {
@@ -277,6 +356,11 @@ function renderTable(emptyMessage) {
     if (status === "online" && !d.isOnline) return false;
     if (status === "offline" && d.isOnline) return false;
     if (status === "noncompliant" && !isNonCompliant(d)) return false;
+    if (["VMB", "VMT", "VMN"].includes(summaryFilter) && d.lastRegion !== summaryFilter) return false;
+    if (summaryFilter === "compliant" && isNonCompliant(d)) return false;
+    if (summaryFilter === "noncompliant" && !isNonCompliant(d)) return false;
+    if (summaryFilter === "internal" && !d.isInternal) return false;
+    if (summaryFilter === "external" && d.isInternal) return false;
     return true;
   });
 
@@ -608,8 +692,19 @@ async function exportSelectedDevices() {
 // ---------------- Init ----------------
 
 document.getElementById("searchBox").addEventListener("input", renderTable);
-document.getElementById("regionFilter").addEventListener("change", renderTable);
-document.getElementById("statusFilter").addEventListener("change", renderTable);
+document.getElementById("regionFilter").addEventListener("change", () => {
+  summaryFilter = "all";
+  renderTable();
+  renderNetworkDashboard();
+});
+document.getElementById("statusFilter").addEventListener("change", () => {
+  summaryFilter = "all";
+  renderTable();
+  renderNetworkDashboard();
+});
+document.querySelectorAll("[data-summary-filter]").forEach(element => {
+  element.addEventListener("click", () => setSummaryFilter(element.dataset.summaryFilter));
+});
 document.getElementById("loadDemoBtn").addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn").addEventListener("click", exportSelectedDevices);
 document.getElementById("statWarnToday").addEventListener("click", openTodayWarningsModal);
@@ -652,6 +747,8 @@ bindSettingsModal();
 loadSettings();
 loadDatabaseHealth();
 loadDevices();
+loadDashboardSummary();
 initSignalR();
 setInterval(loadDevices, 30000); // vẫn poll định kỳ làm nền, phòng khi SignalR bị rớt kết nối tạm thời
+setInterval(loadDashboardSummary, 30000);
 setInterval(loadDatabaseHealth, 30000);

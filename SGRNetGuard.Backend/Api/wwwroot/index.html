@@ -165,9 +165,47 @@
     </table>
   </main>
 
+  <section class="network-dashboard" id="networkDashboard" aria-label="Tổng quan Network Security">
+    <div class="network-dashboard-header">
+      <div>
+        <span class="network-dashboard-kicker">NETWORK SECURITY</span>
+        <h2>Toàn cảnh hệ thống</h2>
+      </div>
+      <span class="network-dashboard-live"><span></span> Dữ liệu trực tiếp</span>
+    </div>
+    <div class="network-dashboard-grid">
+      <article class="network-donut-panel">
+        <div class="network-donut-wrap">
+          <svg class="network-donut" viewBox="0 0 220 220" role="img" aria-label="Tỷ lệ thiết bị theo vùng">
+            <circle class="donut-track" cx="110" cy="110" r="82"></circle>
+            <circle class="donut-segment donut-vmb" data-region="VMB" cx="110" cy="110" r="82"></circle>
+            <circle class="donut-segment donut-vmt" data-region="VMT" cx="110" cy="110" r="82"></circle>
+            <circle class="donut-segment donut-vmn" data-region="VMN" cx="110" cy="110" r="82"></circle>
+          </svg>
+          <div class="donut-center"><strong id="summaryTotal">0</strong><span>TỔNG SỐ MÁY</span></div>
+        </div>
+        <div class="donut-legend">
+          <button class="legend-item" data-summary-filter="VMB"><i class="legend-vmb"></i><span>VMB</span><strong id="summaryVmb">0</strong></button>
+          <button class="legend-item" data-summary-filter="VMT"><i class="legend-vmt"></i><span>VMT</span><strong id="summaryVmt">0</strong></button>
+          <button class="legend-item" data-summary-filter="VMN"><i class="legend-vmn"></i><span>VMN</span><strong id="summaryVmn">0</strong></button>
+        </div>
+      </article>
+      <div class="network-stat-grid" id="networkStatGrid">
+        <button class="network-stat-card accent-cyan" data-summary-filter="all"><span>TỔNG SỐ MÁY</span><b id="cardTotal">0</b></button>
+        <button class="network-stat-card accent-green" data-summary-filter="compliant"><span>TUÂN THỦ ANBM</span><b id="cardCompliant">0</b></button>
+        <button class="network-stat-card accent-red" data-summary-filter="noncompliant"><span>KHÔNG TUÂN THỦ ANBM</span><b id="cardNonCompliant">0</b></button>
+        <button class="network-stat-card accent-blue" data-summary-filter="internal"><span>MẠNG NỘI BỘ</span><b id="cardInternal">0</b></button>
+        <button class="network-stat-card accent-orange" data-summary-filter="external"><span>MẠNG NGOÀI</span><b id="cardExternal">0</b></button>
+        <button class="network-stat-card accent-vmb" data-summary-filter="VMB"><span>VMB</span><b id="cardVmb">0</b></button>
+        <button class="network-stat-card accent-vmt" data-summary-filter="VMT"><span>VMT</span><b id="cardVmt">0</b></button>
+        <button class="network-stat-card accent-vmn" data-summary-filter="VMN"><span>VMN</span><b id="cardVmn">0</b></button>
+      </div>
+    </div>
+  </section>
+
   <div id="toastContainer"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-   <script src="dashboard.js?v=20260821-3"></script>
+  <script src="dashboard.js?v=20260904-1"></script>
 </body>
 </html>

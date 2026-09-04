@@ -529,6 +529,18 @@ app.MapGet("/api/devices", async (SqlDataAccess db) =>
     }
 });
 
+app.MapGet("/api/dashboard/summary", async (SqlDataAccess db) =>
+{
+    try
+    {
+        return Results.Ok(await db.GetDashboardSummaryAsync());
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không tải được tổng quan dashboard: {ex.Message}");
+    }
+});
+
 app.MapGet("/api/alerts/today", async (SqlDataAccess db) =>
 {
     try

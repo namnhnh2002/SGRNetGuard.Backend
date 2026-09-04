@@ -641,6 +641,37 @@ public class SqlDataAccess
               ORDER BY h.LastSeenUtc DESC");
     }
 
+    public async Task<DashboardSummaryDto> GetDashboardSummaryAsync()
+    {
+        using var conn = CreateConnection();
+        var rows = await conn.QueryAsync<(string? Region, bool IsInternal, bool? AdJoined, bool? TrellixInstalled, bool? DesktopCentralInstalled)>(
+            @"WITH LatestHeartbeat AS (
+                   SELECT h.*,
+                          ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC) AS RowNum
+                   FROM public.DeviceHeartbeats h
+              )
+              SELECT LastRegion AS Region, IsInternal, AdJoined, TrellixInstalled, DesktopCentralInstalled
+              FROM LatestHeartbeat
+              WHERE RowNum = 1");
+
+        var deviceRows = rows.ToList();
+        var summary = new DashboardSummaryDto
+        {
+            TotalComputers = deviceRows.Count,
+            Compliant = deviceRows.Count(row => row.AdJoined == true && row.TrellixInstalled == true && row.DesktopCentralInstalled == true),
+            InternalNetwork = deviceRows.Count(row => row.IsInternal),
+            ExternalNetwork = deviceRows.Count(row => !row.IsInternal)
+        };
+
+        summary.NonCompliant = summary.TotalComputers - summary.Compliant;
+        foreach (var region in new[] { "VMB", "VMT", "VMN" })
+        {
+            summary.Regions[region] = deviceRows.Count(row => string.Equals(row.Region, region, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return summary;
+    }
+
     public async Task<IEnumerable<DeviceReportWarningDto>> GetTodayWarningsAsync()
     {
         using var conn = CreateConnection();

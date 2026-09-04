@@ -273,6 +273,65 @@ body.demo-mode .topbar {
 
 main { padding: 20px 24px; }
 
+.network-dashboard {
+  margin: 28px 24px 36px;
+  padding: 24px;
+  color: #e9f3ff;
+  background: #0b1220;
+  border: 1px solid #1d334d;
+  border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(8, 15, 29, .22);
+}
+.network-dashboard-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.network-dashboard-kicker { color: #5de2c1; font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+.network-dashboard h2 { margin: 6px 0 0; font-size: 22px; letter-spacing: .01em; }
+.network-dashboard-live { color: #91a9c2; font-size: 12px; }
+.network-dashboard-live span { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #55e3b7; box-shadow: 0 0 12px #55e3b7; }
+.network-dashboard-grid { display: grid; grid-template-columns: minmax(260px, .9fr) minmax(0, 1.6fr); gap: 18px; }
+.network-donut-panel { min-height: 330px; padding: 20px; background: #101d2e; border: 1px solid #213b56; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 20px; }
+.network-donut-wrap { position: relative; width: min(270px, 60vw); aspect-ratio: 1; flex: 0 0 auto; }
+.network-donut { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.network-donut circle { fill: none; stroke-width: 22; }
+.donut-track { stroke: #1d334b; }
+.donut-segment { cursor: pointer; stroke-linecap: butt; transition: filter .2s ease, opacity .2s ease, stroke-width .2s ease; }
+.donut-segment:hover, .donut-segment.is-selected { filter: drop-shadow(0 0 7px currentColor); stroke-width: 27; }
+.donut-vmb { stroke: #49d3b2; color: #49d3b2; }
+.donut-vmt { stroke: #4c9dff; color: #4c9dff; }
+.donut-vmn { stroke: #f2a65a; color: #f2a65a; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.donut-center strong { color: #fff; font-size: clamp(32px, 4vw, 48px); line-height: 1; }
+.donut-center span { margin-top: 8px; color: #8ca6bf; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
+.donut-legend { display: flex; flex-direction: column; gap: 12px; min-width: 100px; }
+.legend-item { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; color: #d9e7f5; background: transparent; border: 1px solid transparent; border-radius: 7px; text-align: left; cursor: pointer; }
+.legend-item:hover, .legend-item.is-selected { background: #172a40; border-color: #2b4966; }
+.legend-item i { width: 8px; height: 24px; border-radius: 2px; }
+.legend-item span { font-size: 12px; font-weight: 700; }
+.legend-item strong { color: #fff; font-size: 16px; }
+.legend-vmb { background: #49d3b2; }.legend-vmt { background: #4c9dff; }.legend-vmn { background: #f2a65a; }
+.network-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 12px; }
+.network-stat-card { position: relative; min-height: 120px; padding: 16px 16px 14px 20px; overflow: hidden; color: #e7f1fc; background: #101d2e; border: 1px solid #213b56; border-radius: 10px; text-align: left; cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+.network-stat-card::before { content: ""; position: absolute; left: 0; top: 15px; bottom: 15px; width: 3px; border-radius: 0 3px 3px 0; background: var(--card-accent); }
+.network-stat-card::after { content: ""; position: absolute; left: 20px; right: 16px; top: 48px; height: 1px; background: #29445e; }
+.network-stat-card:hover, .network-stat-card.is-selected { background: #172a40; border-color: var(--card-accent); transform: translateY(-2px); }
+.network-stat-card span { display: block; color: #8ca6bf; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.network-stat-card b { display: block; margin-top: 24px; color: #f7fbff; font-size: 32px; line-height: 1; }
+.accent-cyan { --card-accent: #55d7e9; }.accent-green { --card-accent: #49d3b2; }.accent-red { --card-accent: #ff6689; }.accent-blue { --card-accent: #4c9dff; }.accent-orange { --card-accent: #f2a65a; }.accent-vmb { --card-accent: #49d3b2; }.accent-vmt { --card-accent: #4c9dff; }.accent-vmn { --card-accent: #f2a65a; }
+
+@media (max-width: 900px) {
+  .network-dashboard-grid { grid-template-columns: 1fr; }
+  .network-donut-panel { min-height: 280px; }
+}
+@media (max-width: 560px) {
+  .network-dashboard { margin: 20px 12px 28px; padding: 16px; }
+  .network-dashboard-header { align-items: flex-start; flex-direction: column; }
+  .network-donut-panel { flex-direction: column; }
+  .donut-legend { flex-direction: row; width: 100%; justify-content: space-between; }
+  .legend-item { grid-template-columns: 8px 1fr; }
+  .legend-item strong { grid-column: 2; }
+  .network-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .network-stat-card { min-height: 104px; padding-left: 16px; }
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
