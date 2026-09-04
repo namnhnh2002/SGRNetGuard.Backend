@@ -1,5 +1,5 @@
 param(
-    [string]$ApiUrl = "https://render.com",
+    [string]$ApiUrl = "https://sgrnetguard-backend.onrender.com",
     [int]$IntervalSeconds = 60,
     [switch]$Once,
     [string]$DeviceName = ""

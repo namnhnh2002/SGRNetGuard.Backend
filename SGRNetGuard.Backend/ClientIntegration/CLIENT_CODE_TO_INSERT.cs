@@ -44,7 +44,7 @@ public class RemoteConfigClient
 {
     private static readonly string ApiBaseUrl =
         Environment.GetEnvironmentVariable("SGR_NETGUARD_API_URL")?.TrimEnd('/')
-        ?? "https://render.com";
+        ?? "https://sgrnetguard-backend.onrender.com";
 
     private readonly HttpClient _http;
     private readonly string _cacheFilePath;
@@ -158,7 +158,7 @@ public class TelemetryClient
 {
     private static readonly string ApiBaseUrl =
         Environment.GetEnvironmentVariable("SGR_NETGUARD_API_URL")?.TrimEnd('/')
-        ?? "https://render.com";
+        ?? "https://sgrnetguard-backend.onrender.com";
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
     /// <summary>
