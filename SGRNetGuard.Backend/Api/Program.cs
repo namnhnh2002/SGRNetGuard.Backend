@@ -270,6 +270,11 @@ app.UseStaticFiles(new StaticFileOptions
     FileProvider = webRootProvider
 });    // phục vụ dashboard.js, style.css trong wwwroot/
 
+app.MapGet("/style.css", () => Results.File(Path.Combine(webRootPath, "style.css"), "text/css"));
+app.MapGet("/dashboard.js", () => Results.File(Path.Combine(webRootPath, "dashboard.js"), "text/javascript"));
+app.MapGet("/device.js", () => Results.File(Path.Combine(webRootPath, "device.js"), "text/javascript"));
+app.MapGet("/agent.js", () => Results.File(Path.Combine(webRootPath, "agent.js"), "text/javascript"));
+
 static IResult DatabaseUnavailable(string message) => Results.Json(new
 {
     ok = false,
