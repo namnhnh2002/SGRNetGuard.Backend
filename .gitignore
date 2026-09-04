@@ -1,0 +1,8 @@
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/api-run*.log
+**/system-settings.json
+build-validation/
+render-publish/

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sgr-netguard-api
+    runtime: dotnet
+    buildCommand: dotnet publish SGRNetGuard.Backend/Api/SGRNetGuard.Api.csproj -c Release -o publish
+    startCommand: dotnet publish/SGRNetGuard.Api.dll --urls http://0.0.0.0:$PORT
+    healthCheckPath: /
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DashboardAuth__Enabled
+        value: "true"
+      - key: DashboardAuth__Username
+        value: admin
+      - key: DashboardAuth__Password
+        generateValue: true
+      - key: ConnectionStrings__SGRNetGuard
+        sync: false

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SGR NetGuard - IT Dashboard</title>
+<link rel="stylesheet" href="style.css?v=20260817-2" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🛡️</span>
+      <span>SGR NetGuard</span>
+    </div>
+    <div class="stats" id="statsBar">
+      <div class="stat"><span class="stat-value" id="statTotal">-</span><span class="stat-label">Tổng số máy</span></div>
+      <div class="stat"><span class="stat-value" id="statOnline">-</span><span class="stat-label">Đang online</span></div>
+      <div class="stat"><button type="button" class="stat-value stat-action" id="statWarnToday" title="Xem cảnh báo hôm nay">-</button><span class="stat-label">Cảnh báo hôm nay</span></div>
+      <div class="stat"><span class="stat-value" id="statNonCompliant">-</span><span class="stat-label">Chưa tuân thủ ANBM</span></div>
+      <div class="stat"><span class="stat-value" id="statExternal">-</span><span class="stat-label">Mạng ngoài</span></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="🔍 Tìm theo tên máy hoặc site..." />
+    <select id="regionFilter">
+      <option value="">Tất cả vùng</option>
+      <option value="VMB">VMB</option>
+      <option value="VMT">VMT</option>
+      <option value="VMN">VMN</option>
+    </select>
+    <select id="statusFilter">
+      <option value="">Tất cả trạng thái</option>
+      <option value="online">Đang online</option>
+      <option value="offline">Offline</option>
+      <option value="noncompliant">Chưa tuân thủ ANBM</option>
+    </select>
+    <button type="button" class="report-action-button" id="exportSelectedBtn">Xuất báo cáo (0)</button>
+    <button type="button" class="settings-button" id="settingsButton">⚙ Cài đặt</button>
+    <span class="conn-status" id="connStatus">● Đang kết nối realtime...</span>
+    <button type="button" class="demo-button" id="loadDemoBtn" hidden>Load demo data</button>
+  </div>
+
+  <div id="settingsModal" class="settings-modal hidden" aria-hidden="true">
+    <div class="settings-modal-backdrop" data-close="settings"></div>
+    <div class="settings-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="settings-modal-header">
+        <h3 id="settingsTitle">⚙ Cài đặt chung</h3>
+        <button type="button" class="settings-close" id="closeSettingsBtn" aria-label="Đóng cửa sổ cài đặt">✕</button>
+      </div>
+
+      <form id="settingsForm" class="settings-form">
+        <div class="settings-form-grid">
+          <div class="settings-col">
+            <div class="form-row">
+              <label class="field-label">Tên hệ thống <span class="required">*</span></label>
+              <input name="systemName" type="text" placeholder="SGR NetGuard" />
+            </div>
+
+            <div class="form-row">
+              <label class="field-label">URL / API Server <span class="required">*</span></label>
+              <input name="apiServerUrl" type="url" placeholder="https://api.sgrnetguard.vn" />
+            </div>
+
+            <div class="form-row">
+              <label class="field-label">Ngôn ngữ <span class="required">*</span></label>
+              <select name="language">
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label class="field-label">Đổi mật khẩu </label>
+              <input name="dashboardPassword" type="password" placeholder="" />
+            </div>
+          </div>
+
+          <div class="settings-col">
+            <div class="form-row">
+              <label class="field-label">Tên công ty/tập đoàn <span class="required">*</span></label>
+              <input name="companyName" type="text" placeholder="Sungroup" />
+            </div>
+
+            <div class="form-row">
+              <label class="field-label">Email nhận cảnh báo</label>
+              <input name="alertEmail" type="email" placeholder="admin@sungroup.com.vn" />
+            </div>
+
+            <div class="form-row checkbox-row">
+              <label class="field-label">Thông báo Realtime</label>
+              <label class="toggle">
+                <input name="realtimeEnabled" type="checkbox" id="realtimeToggle" />
+                <span class="switch" aria-hidden="true"></span>
+                <span class="toggle-label">Bật Realtime</span>
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label class="field-label">Username  <span class="required">*</span></label>
+              <input name="dashboardUsername" type="text" placeholder="admin" />
+              
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-bottom">
+
+          <div class="settings-actions">
+            <button type="button" class="secondary-button" id="logoutSettingsBtn">Đăng xuất</button>
+            <button type="button" class="secondary-button" id="resetSettingsBtn">Đặt lại</button>
+            <button type="submit" class="primary-button">Lưu cài đặt</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="todayWarningsModal" class="today-warnings-modal hidden" aria-hidden="true">
+    <div class="today-warnings-backdrop" data-close="today-warnings"></div>
+    <div class="today-warnings-panel" role="dialog" aria-modal="true" aria-labelledby="todayWarningsTitle">
+      <div class="settings-modal-header">
+        <h3 id="todayWarningsTitle">Cảnh báo hôm nay</h3>
+        <button type="button" class="settings-close" id="closeTodayWarningsBtn" aria-label="Đóng danh sách cảnh báo">✕</button>
+      </div>
+      <div id="todayWarningsContent" class="today-warnings-content" aria-live="polite">Đang tải cảnh báo...</div>
+    </div>
+  </div>
+
+  <section class="db-banner db-banner-ok" id="dbBanner" aria-live="polite" hidden>
+    <span class="db-banner-dot"></span>
+    <div>
+      <strong id="dbBannerTitle">Database đang hoạt động</strong>
+      <div id="dbBannerMessage">Dashboard có thể tải dữ liệu bình thường.</div>
+    </div>
+  </section>
+
+  <section class="demo-banner" id="demoBanner" hidden>
+    <strong>Demo mode</strong>
+    <span>Dữ liệu mẫu đang được hiển thị. Khi DB có dữ liệu thật, bảng sẽ tự thay đổi.</span>
+  </section>
+
+  <main>
+    <table id="deviceTable">
+      <thead>
+        <tr>
+          <th class="select-col"><input type="checkbox" id="selectAllRows" title="Chọn tất cả dòng đang hiển thị" /></th>
+          <th>Trạng thái</th>
+          <th>Tên máy</th>
+          <th>Site</th>
+          <th>Vùng</th>
+          <th>Mạng</th>
+          <th>Tín hiệu</th>
+          <th>CPU</th>
+          <th>RAM</th>
+          <th>Disk</th>
+          <th>ANBM</th>
+          <th>Cảnh báo hôm nay</th>
+          <th>Cập nhật gần nhất</th>
+        </tr>
+      </thead>
+      <tbody id="deviceTableBody">
+        <tr><td colspan="13" class="empty-row">Đang tải dữ liệu...</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <div id="toastContainer"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+   <script src="dashboard.js?v=20260821-3"></script>
+</body>
+</html>
