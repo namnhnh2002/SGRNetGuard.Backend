@@ -84,6 +84,8 @@ public class SqlDataAccess
 
     private static bool ResolveIsInternal(bool isInternal, string? lanIp, string? publicIp)
     {
+        if (IsPrivateIpv4(lanIp)) return true;
+        if (!string.IsNullOrWhiteSpace(lanIp)) return false;
         return isInternal;
     }
     public async Task<RemoteConfigDto> GetActiveConfigAsync()
