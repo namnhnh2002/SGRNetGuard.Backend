@@ -252,13 +252,20 @@ function Send-Heartbeat {
     }
 
     $json = $payload | ConvertTo-Json -Depth 10
-    try {
-        $uri = "$ApiUrl/api/heartbeat"
-        Invoke-RestMethod -Method Post -Uri $uri -ContentType "application/json" -Body $json | Out-Null
-        Write-Host "Heartbeat sent to $uri for device $device"
-    }
-    catch {
-        Write-Warning "Cannot send heartbeat to $ApiUrl. Error: $($_.Exception.Message)"
+    $uri = "$ApiUrl/api/heartbeat"
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            Invoke-RestMethod -Method Post -Uri $uri -ContentType "application/json" -Body $json -TimeoutSec 15 | Out-Null
+            Write-Host "Heartbeat sent to $uri for device $device"
+            return
+        }
+        catch {
+            $message = "$(Get-Date -Format o) Heartbeat attempt $attempt failed for $device`: $($_.Exception.Message)"
+            Add-Content -Path (Join-Path $PSScriptRoot 'heartbeat-error.log') -Value $message
+            if ($attempt -lt 3) {
+                Start-Sleep -Seconds 5
+            }
+        }
     }
 }
 
