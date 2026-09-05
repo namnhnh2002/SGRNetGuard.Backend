@@ -361,6 +361,28 @@ public class SqlDataAccess
                 DownloadMbps = dto.DownloadMbps,
                 UploadMbps = dto.UploadMbps
             });
+
+        await TouchAgentActivityAsync(conn, dto.DeviceName);
+    }
+
+    public async Task TouchAgentActivityAsync(string deviceName)
+    {
+        using var conn = CreateConnection();
+        await TouchAgentActivityAsync(conn, deviceName);
+    }
+
+    private static async Task TouchAgentActivityAsync(NpgsqlConnection conn, string? deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName)) return;
+
+        await conn.ExecuteAsync(
+            @"UPDATE public.DeviceHeartbeats
+              SET LastSeenUtc = CURRENT_TIMESTAMP
+              WHERE LOWER(DeviceName) = LOWER(@DeviceName);
+              UPDATE public.Devices
+              SET LastSeen = CURRENT_TIMESTAMP
+              WHERE LOWER(ComputerName) = LOWER(@DeviceName);",
+            new { DeviceName = deviceName });
     }
 
     public async Task RecordPerformanceLogAsync(PerformanceLogDto dto)
@@ -382,6 +404,8 @@ public class SqlDataAccess
                 DiskIO = dto.DiskIO,
                 TopProcess = dto.TopProcess
             });
+
+            await TouchAgentActivityAsync(conn, dto.DeviceName);
     }
 
     public async Task RecordComplianceStatusAsync(ComplianceStatusDto dto)
@@ -403,6 +427,8 @@ public class SqlDataAccess
                 EndpointProtection = dto.EndpointProtection,
                 OverallStatus = dto.OverallStatus
             });
+
+            await TouchAgentActivityAsync(conn, dto.DeviceName);
     }
 
     public async Task UpsertSoftwareInventoryAsync(SoftwareInventoryEntryDto dto)
