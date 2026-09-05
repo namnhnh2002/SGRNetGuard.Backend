@@ -5,6 +5,63 @@ param(
     [string]$DeviceName = ""
 )
 
+$script:siteConfig = $null
+$script:siteConfigLoadedAt = [datetime]::MinValue
+
+function Get-SiteContext {
+    param([string]$LanIp)
+
+    try {
+        if ($null -eq $script:siteConfig -or ((Get-Date) - $script:siteConfigLoadedAt).TotalHours -ge 6) {
+            $script:siteConfig = Invoke-RestMethod -Method Get -Uri "$ApiUrl/api/config" -TimeoutSec 10
+            $script:siteConfigLoadedAt = Get-Date
+        }
+
+        $address = [System.Net.IPAddress]::Parse($LanIp).GetAddressBytes()
+        $matchingSites = @()
+        foreach ($site in $script:siteConfig.sites) {
+            $subnetParts = $site.subnet -split '/', 2
+            if ($subnetParts.Count -ne 2) { continue }
+            $network = [System.Net.IPAddress]::Parse($subnetParts[0]).GetAddressBytes()
+            $prefixLength = [int]$subnetParts[1]
+            $fullBytes = [math]::Floor($prefixLength / 8)
+            $remainingBits = $prefixLength % 8
+            $matches = $true
+            for ($index = 0; $index -lt $fullBytes; $index++) {
+                if ($address[$index] -ne $network[$index]) { $matches = $false; break }
+            }
+            if ($matches -and $remainingBits -gt 0) {
+                $mask = [byte](255 - [math]::Pow(2, 8 - $remainingBits) + 1)
+                $matches = (($address[$fullBytes] -band $mask) -eq ($network[$fullBytes] -band $mask))
+            }
+            if ($matches) { $matchingSites += $site }
+        }
+        return $matchingSites | Sort-Object { [int](($_.subnet -split '/', 2)[1]) } -Descending | Select-Object -First 1
+    }
+    catch {
+        # Site resolution is best effort; the API also resolves by subnet.
+    }
+    return $null
+}
+
+function Get-NetworkContext {
+    try {
+        $configuration = Get-NetIPConfiguration -ErrorAction Stop |
+            Where-Object { $_.IPv4Address.IPAddress -and $_.IPv4Address.IPAddress -notmatch '^(127\.|169\.254\.)' } |
+            Select-Object -First 1
+        if ($null -eq $configuration) { return @{ Type = ""; Signal = $null; LinkSpeed = "" } }
+
+        $adapter = Get-NetAdapter -InterfaceIndex $configuration.InterfaceIndex -ErrorAction SilentlyContinue
+        $type = if ($adapter -and $adapter.NdisPhysicalMedium -eq "Native 802.11") { "WiFi" } elseif ($adapter) { "LAN" } else { "" }
+        $signal = if ($type -eq "WiFi") { (netsh wlan show interfaces | Select-String "Signal") -replace '.*:\s*', '' -replace '%', '' } else { $null }
+        $linkSpeed = if ($type -eq "LAN") { [string]$adapter.LinkSpeed } else { "" }
+        return @{ Type = $type; Signal = if ($signal) { [int]$signal } else { $null }; LinkSpeed = $linkSpeed }
+    }
+    catch {
+        return @{ Type = ""; Signal = $null; LinkSpeed = "" }
+    }
+}
+
 function Get-CurrentCpuPercent {
     try {
         $cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction Stop).CounterSamples.CookedValue
@@ -204,8 +261,10 @@ function Send-Heartbeat {
     $cpu = Get-CurrentCpuPercent
     $ram = Get-CurrentRamPercent
     $disk = Get-CurrentDiskPercent
-    $isInternal = Test-IsInternalNetwork
     $lanIp = Get-PrivateLanIp
+    $site = if ($lanIp) { Get-SiteContext -LanIp $lanIp } else { $null }
+    $isInternal = $null -ne $site
+    $network = Get-NetworkContext
     $macAddress = Get-MacAddress
     $cpuModel = Get-CpuModel
     $ramTotal = Get-RamTotalText
@@ -223,11 +282,14 @@ function Send-Heartbeat {
         department = ""
         location = ""
         operatingSystem = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
-        siteName = ""
-        region = ""
+        siteName = if ($site) { [string]$site.site } else { "" }
+        region = if ($site) { [string]$site.region } else { "" }
         isInternal = $isInternal
         appVersion = "1.0.0"
         macAddress = $macAddress
+        networkType = $network.Type
+        wifiSignalDbm = $network.Signal
+        lanLinkSpeed = $network.LinkSpeed
         cpuPercent = $cpu
         ramPercent = $ram
         diskPercent = $disk

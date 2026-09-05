@@ -81,6 +81,16 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 app.UseCors("DefaultCors");
 
+try
+{
+    await app.Services.GetRequiredService<SqlDataAccess>()
+        .EnsureDatabaseAndSiteCatalogAsync(AppContext.BaseDirectory);
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "Không thể tự khởi tạo schema/site catalog PostgreSQL.");
+}
+
 var currentSettings = LoadSettings();
 var dashboardAuthEnabled = app.Configuration.GetValue<bool>("DashboardAuth:Enabled", false);
 var dashboardUsername = app.Configuration["DashboardAuth:Username"] ?? currentSettings.DashboardUsername;

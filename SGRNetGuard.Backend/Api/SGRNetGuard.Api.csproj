@@ -13,4 +13,9 @@
     <PackageReference Include="ClosedXML" Version="0.104.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\Database\postgresql_schema.sql" Link="Database\postgresql_schema.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <None Include="..\Database\postgresql_seed.sql" Link="Database\postgresql_seed.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
 </Project>

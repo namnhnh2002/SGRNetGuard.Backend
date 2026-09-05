@@ -50,6 +50,24 @@ public class SqlDataAccess
 
     private NpgsqlConnection CreateConnection() => new(_connectionString);
 
+    public async Task EnsureDatabaseAndSiteCatalogAsync(string baseDirectory)
+    {
+        var schemaPath = Path.Combine(baseDirectory, "Database", "postgresql_schema.sql");
+        var seedPath = Path.Combine(baseDirectory, "Database", "postgresql_seed.sql");
+        if (!File.Exists(schemaPath) || !File.Exists(seedPath))
+            throw new FileNotFoundException("Không tìm thấy file bootstrap PostgreSQL trong bản publish.");
+
+        await using var conn = CreateConnection();
+        await conn.OpenAsync();
+        await using var command = conn.CreateCommand();
+        command.CommandTimeout = 60;
+
+        command.CommandText = await File.ReadAllTextAsync(schemaPath);
+        await command.ExecuteNonQueryAsync();
+        command.CommandText = await File.ReadAllTextAsync(seedPath);
+        await command.ExecuteNonQueryAsync();
+    }
+
     private static Guid ResolveDeviceId(string? deviceId, string? deviceName, string? macAddress)
     {
         if (Guid.TryParse(deviceId, out var parsed)) return parsed;
@@ -82,10 +100,53 @@ public class SqlDataAccess
                (bytes[0] == 169 && bytes[1] == 254);
     }
 
-    private static bool ResolveIsInternal(bool isInternal, string? lanIp, string? publicIp, string? siteName, string? region)
+    private async Task<SiteDto?> ResolveSiteAsync(NpgsqlConnection conn, NpgsqlTransaction? tx, string? lanIp)
     {
-        return isInternal;
+        if (!IPAddress.TryParse(lanIp, out var address) || address.AddressFamily != AddressFamily.InterNetwork)
+            return null;
+
+        var sites = await conn.QueryAsync<SiteDto>(
+            @"SELECT Region, SiteName AS Site, Subnet, ItAccount AS IT, TeamsAccount AS Teams
+                            FROM public.Sites WHERE IsActive = TRUE",
+                        transaction: tx);
+
+        return sites
+            .Where(site => IsIpInSubnet(address, site.Subnet))
+            .OrderByDescending(site => GetSubnetPrefixLength(site.Subnet))
+            .FirstOrDefault();
     }
+
+    private static int GetSubnetPrefixLength(string? subnet)
+    {
+        var parts = subnet?.Split('/', 2, StringSplitOptions.TrimEntries);
+        return parts is { Length: 2 } && int.TryParse(parts[1], out var prefixLength) ? prefixLength : -1;
+    }
+
+    private static bool IsIpInSubnet(IPAddress address, string? subnet)
+    {
+        var parts = subnet?.Split('/', 2, StringSplitOptions.TrimEntries);
+        if (parts is not { Length: 2 } ||
+            !IPAddress.TryParse(parts[0], out var network) ||
+            !int.TryParse(parts[1], out var prefixLength) ||
+            network.AddressFamily != AddressFamily.InterNetwork ||
+            prefixLength is < 0 or > 32)
+            return false;
+
+        var addressBytes = address.GetAddressBytes();
+        var networkBytes = network.GetAddressBytes();
+        var fullBytes = prefixLength / 8;
+        var remainingBits = prefixLength % 8;
+
+        for (var index = 0; index < fullBytes; index++)
+        {
+            if (addressBytes[index] != networkBytes[index]) return false;
+        }
+
+        return remainingBits == 0 ||
+               (addressBytes[fullBytes] & (byte)(0xff << (8 - remainingBits))) ==
+               (networkBytes[fullBytes] & (byte)(0xff << (8 - remainingBits)));
+    }
+
     public async Task<RemoteConfigDto> GetActiveConfigAsync()
     {
         using var conn = CreateConnection();
@@ -164,7 +225,11 @@ public class SqlDataAccess
 
         var resolvedDeviceId = ResolveDeviceId(dto.DeviceId, dto.ComputerName ?? dto.DeviceName, dto.MacAddress);
         var effectiveDeviceName = string.IsNullOrWhiteSpace(dto.ComputerName) ? dto.DeviceName : dto.ComputerName;
-        var effectiveIsInternal = ResolveIsInternal(dto.IsInternal, dto.LanIp, dto.PublicIp, dto.SiteName, dto.Region);
+        var resolvedSite = await ResolveSiteAsync(conn, tx, dto.LanIp);
+        var hasLanIp = !string.IsNullOrWhiteSpace(dto.LanIp);
+        var effectiveIsInternal = resolvedSite is not null || (!hasLanIp && dto.IsInternal);
+        var effectiveSiteName = resolvedSite?.Site ?? (effectiveIsInternal ? dto.SiteName : null);
+        var effectiveRegion = resolvedSite?.Region ?? (effectiveIsInternal ? dto.Region : null);
 
         await conn.ExecuteAsync(
             @"INSERT INTO public.Devices (DeviceId, MACAddress, ComputerName, CurrentUser, CurrentDepartment, CurrentLocation, OperatingSystem, FirstSeen, LastSeen, Status)
@@ -230,9 +295,9 @@ public class SqlDataAccess
                           END,
                           CURRENT_TIMESTAMP)
                   ON CONFLICT (DeviceName) DO UPDATE SET
-                      LastSiteName = COALESCE(NULLIF(EXCLUDED.LastSiteName, ''), public.DeviceHeartbeats.LastSiteName),
-                      LastRegion = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN EXCLUDED.LastRegion ELSE public.DeviceHeartbeats.LastRegion END,
-                      LastInternalSeenUtc = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN CURRENT_TIMESTAMP ELSE public.DeviceHeartbeats.LastInternalSeenUtc END,
+                      LastSiteName = CASE WHEN EXCLUDED.IsInternal THEN COALESCE(NULLIF(EXCLUDED.LastSiteName, ''), public.DeviceHeartbeats.LastSiteName) ELSE NULL END,
+                      LastRegion = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN EXCLUDED.LastRegion ELSE CASE WHEN EXCLUDED.IsInternal THEN public.DeviceHeartbeats.LastRegion ELSE NULL END END,
+                      LastInternalSeenUtc = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN CURRENT_TIMESTAMP ELSE CASE WHEN EXCLUDED.IsInternal THEN public.DeviceHeartbeats.LastInternalSeenUtc ELSE NULL END END,
                       IsInternal = EXCLUDED.IsInternal,
                       AppVersion = EXCLUDED.AppVersion,
                       CpuPercent = EXCLUDED.CpuPercent,
@@ -262,8 +327,8 @@ public class SqlDataAccess
             new
             {
                 DeviceName = effectiveDeviceName,
-                SiteName = dto.SiteName,
-                Region = dto.Region,
+                SiteName = effectiveSiteName,
+                Region = effectiveRegion,
                 IsInternal = effectiveIsInternal,
                 HasNetworkData = !string.IsNullOrWhiteSpace(dto.LanIp) || !string.IsNullOrWhiteSpace(dto.PublicIp),
                 AppVersion = dto.AppVersion,
@@ -343,7 +408,10 @@ public class SqlDataAccess
     public async Task RecordNetworkStatusAsync(NetworkStatusDto dto)
     {
         using var conn = CreateConnection();
+        await conn.OpenAsync();
         var deviceId = ResolveDeviceId(dto.DeviceId, dto.DeviceName, dto.MacAddress);
+        var site = await ResolveSiteAsync(conn, null, dto.IPAddress);
+        var isInternal = site is not null;
 
         await conn.ExecuteAsync(
                         @"INSERT INTO public.NetworkStatus (DeviceId, ConnectionType, AdapterName, IPAddress, MACAddress, SSID, SignalStrengthDbm, LinkSpeedMbps, DownloadMbps, UploadMbps, Timestamp)
@@ -362,7 +430,31 @@ public class SqlDataAccess
                 UploadMbps = dto.UploadMbps
             });
 
-        await TouchAgentActivityAsync(conn, dto.DeviceName);
+        await conn.ExecuteAsync(
+            @"UPDATE public.DeviceHeartbeats
+              SET LastSiteName = CASE WHEN @IsInternal THEN @SiteName ELSE NULL END,
+                  LastRegion = CASE WHEN @IsInternal THEN @Region ELSE NULL END,
+                  LastInternalSeenUtc = CASE WHEN @IsInternal THEN CURRENT_TIMESTAMP ELSE NULL END,
+                  IsInternal = @IsInternal,
+                  NetworkType = @ConnectionType,
+                  WifiSignalDbm = CASE WHEN @ConnectionType = 'WiFi' THEN @SignalStrengthDbm ELSE NULL END,
+                  LanLinkSpeed = CASE WHEN @ConnectionType = 'LAN' THEN CAST(@LinkSpeedMbps AS text) ELSE NULL END,
+                  LastSeenUtc = CURRENT_TIMESTAMP
+              WHERE LOWER(DeviceName) = LOWER(@DeviceName);
+              UPDATE public.Devices
+              SET Status = CASE WHEN @IsInternal THEN 'Active' ELSE 'External' END,
+                  LastSeen = CURRENT_TIMESTAMP
+              WHERE LOWER(ComputerName) = LOWER(@DeviceName);",
+            new
+            {
+                DeviceName = dto.DeviceName,
+                IsInternal = isInternal,
+                SiteName = site?.Site,
+                Region = site?.Region,
+                ConnectionType = dto.ConnectionType,
+                SignalStrengthDbm = dto.SignalStrengthDbm,
+                LinkSpeedMbps = dto.LinkSpeedMbps
+            });
     }
 
     public async Task TouchAgentActivityAsync(string deviceName)
