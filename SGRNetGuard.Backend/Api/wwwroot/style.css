@@ -306,12 +306,13 @@ main { padding: 20px 24px; }
 .donut-center strong { color: #fff; font-size: clamp(32px, 4vw, 48px); line-height: 1; }
 .donut-center span { margin-top: 8px; color: #8ca6bf; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
 .donut-legend { display: flex; flex-direction: column; gap: 12px; min-width: 100px; }
-.legend-item { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; color: #d9e7f5; background: transparent; border: 1px solid transparent; border-radius: 7px; text-align: left; cursor: pointer; }
+.legend-item { display: grid; grid-template-columns: 10px 1fr auto auto; align-items: center; gap: 8px; padding: 7px 8px; color: #d9e7f5; background: transparent; border: 1px solid transparent; border-radius: 7px; text-align: left; cursor: pointer; }
 .legend-item:hover, .legend-item.is-selected { background: #172a40; border-color: #2b4966; }
 .legend-item i { width: 8px; height: 24px; border-radius: 2px; }
 .legend-item span { font-size: 12px; font-weight: 700; }
 .legend-item strong { color: #fff; font-size: 16px; }
-.legend-vmb { background: #49d3b2; }.legend-vmt { background: #4c9dff; }.legend-vmn { background: #f2a65a; }
+.legend-item em { color: #9fb7ca; font-size: 12px; font-style: normal; min-width: 30px; text-align: right; }
+.legend-vmb { background: #49d3b2; }.legend-vmt { background: #4c9dff; }.legend-vmn { background: #f2a65a; }.legend-unknown { background: #a8b6c2; }
 .network-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 12px; }
 .network-stat-card { position: relative; min-height: 84px; padding: 13px 16px 12px 22px; overflow: hidden; color: #e7f1fc; background: rgba(7, 30, 48, .72); border: 1px dashed #4b6a81; border-radius: 12px; text-align: left; cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease; }
 .network-stat-card::before { content: ""; position: absolute; left: 0; top: 15px; bottom: 15px; width: 3px; border-radius: 0 3px 3px 0; background: var(--card-accent); }
@@ -330,8 +331,9 @@ main { padding: 20px 24px; }
   .network-dashboard-header { align-items: flex-start; flex-direction: column; }
   .network-donut-panel { flex-direction: column; }
   .donut-legend { flex-direction: row; width: 100%; justify-content: space-between; }
-  .legend-item { grid-template-columns: 8px 1fr; }
-  .legend-item strong { grid-column: 2; }
+  .legend-item { grid-template-columns: 8px 1fr auto; }
+  .legend-item strong { grid-column: 3; }
+  .legend-item em { grid-column: 2 / 4; }
   .network-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .network-stat-card { min-height: 104px; padding-left: 16px; }
 }

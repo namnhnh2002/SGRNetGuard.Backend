@@ -215,10 +215,25 @@ function renderNetworkDashboard() {
     VMT: Number(regions.VMT ?? regions.vmt ?? 0),
     VMN: Number(regions.VMN ?? regions.vmn ?? 0)
   };
+  values.unknown = Math.max(0, total - values.VMB - values.VMT - values.VMN);
+  const regionNames = ["VMB", "VMT", "VMN", "unknown"];
+  const percentages = Object.fromEntries(regionNames.map(region => [
+    region,
+    total > 0 ? (values[region] / total) * 100 : 0
+  ]));
+  const roundedPercentages = Object.fromEntries(regionNames.map(region => [region, Math.floor(percentages[region])]));
+  let remainingPercentage = total > 0
+    ? 100 - regionNames.reduce((sum, region) => sum + roundedPercentages[region], 0)
+    : 0;
+  [...regionNames]
+    .sort((left, right) => (percentages[right] % 1) - (percentages[left] % 1))
+    .slice(0, remainingPercentage)
+    .forEach(region => roundedPercentages[region]++);
 
   [
     ["summaryTotal", total], ["cardTotal", total], ["summaryVmb", values.VMB], ["cardVmb", values.VMB],
     ["summaryVmt", values.VMT], ["cardVmt", values.VMT], ["summaryVmn", values.VMN], ["cardVmn", values.VMN],
+    ["summaryUnknown", values.unknown],
     ["cardCompliant", Number(summary.compliant || 0)], ["cardNonCompliant", Number(summary.nonCompliant || 0)],
     ["cardInternal", Number(summary.internalNetwork || 0)], ["cardExternal", Number(summary.externalNetwork || 0)]
   ].forEach(([id, value]) => {
@@ -228,7 +243,7 @@ function renderNetworkDashboard() {
 
   const circumference = 2 * Math.PI * 82;
   let offset = 0;
-  ["VMB", "VMT", "VMN"].forEach(region => {
+  regionNames.forEach(region => {
     const segment = document.querySelector(`.donut-${region.toLowerCase()}`);
     if (!segment) return;
     const length = total > 0 ? (values[region] / total) * circumference : 0;
@@ -236,6 +251,14 @@ function renderNetworkDashboard() {
     segment.style.strokeDashoffset = `${-offset}`;
     offset += length;
     segment.classList.toggle("is-selected", summaryFilter === region);
+  });
+
+  [
+    ["summaryVmbPercent", roundedPercentages.VMB], ["summaryVmtPercent", roundedPercentages.VMT],
+    ["summaryVmnPercent", roundedPercentages.VMN], ["summaryUnknownPercent", roundedPercentages.unknown]
+  ].forEach(([id, percentage]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = `${percentage}%`;
   });
 
   document.querySelectorAll("[data-summary-filter]").forEach(element => {
@@ -357,6 +380,7 @@ function renderTable(emptyMessage) {
     if (status === "offline" && d.isOnline) return false;
     if (status === "noncompliant" && !isNonCompliant(d)) return false;
     if (["VMB", "VMT", "VMN"].includes(summaryFilter) && d.lastRegion !== summaryFilter) return false;
+    if (summaryFilter === "unknown" && d.lastRegion) return false;
     if (summaryFilter === "compliant" && isNonCompliant(d)) return false;
     if (summaryFilter === "noncompliant" && !isNonCompliant(d)) return false;
     if (summaryFilter === "internal" && !d.isInternal) return false;
@@ -704,6 +728,9 @@ document.getElementById("statusFilter").addEventListener("change", () => {
 });
 document.querySelectorAll("[data-summary-filter]").forEach(element => {
   element.addEventListener("click", () => setSummaryFilter(element.dataset.summaryFilter));
+});
+document.querySelectorAll(".donut-segment").forEach(element => {
+  element.addEventListener("click", () => setSummaryFilter(element.dataset.region));
 });
 document.getElementById("loadDemoBtn").addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn").addEventListener("click", exportSelectedDevices);

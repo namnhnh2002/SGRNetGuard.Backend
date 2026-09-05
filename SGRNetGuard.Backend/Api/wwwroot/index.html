@@ -181,13 +181,15 @@
             <circle class="donut-segment donut-vmb" data-region="VMB" cx="110" cy="110" r="82"></circle>
             <circle class="donut-segment donut-vmt" data-region="VMT" cx="110" cy="110" r="82"></circle>
             <circle class="donut-segment donut-vmn" data-region="VMN" cx="110" cy="110" r="82"></circle>
+            <circle class="donut-segment donut-unknown" data-region="unknown" cx="110" cy="110" r="82"></circle>
           </svg>
           <div class="donut-center"><strong id="summaryTotal">0</strong><span>TỔNG SỐ MÁY</span></div>
         </div>
         <div class="donut-legend">
-          <button class="legend-item" data-summary-filter="VMB"><i class="legend-vmb"></i><span>VMB</span><strong id="summaryVmb">0</strong></button>
-          <button class="legend-item" data-summary-filter="VMT"><i class="legend-vmt"></i><span>VMT</span><strong id="summaryVmt">0</strong></button>
-          <button class="legend-item" data-summary-filter="VMN"><i class="legend-vmn"></i><span>VMN</span><strong id="summaryVmn">0</strong></button>
+          <button class="legend-item" data-summary-filter="VMB"><i class="legend-vmb"></i><span>VMB</span><strong id="summaryVmb">0</strong><em id="summaryVmbPercent">0%</em></button>
+          <button class="legend-item" data-summary-filter="VMT"><i class="legend-vmt"></i><span>VMT</span><strong id="summaryVmt">0</strong><em id="summaryVmtPercent">0%</em></button>
+          <button class="legend-item" data-summary-filter="VMN"><i class="legend-vmn"></i><span>VMN</span><strong id="summaryVmn">0</strong><em id="summaryVmnPercent">0%</em></button>
+          <button class="legend-item" data-summary-filter="unknown"><i class="legend-unknown"></i><span>Chưa xác định vùng</span><strong id="summaryUnknown">0</strong><em id="summaryUnknownPercent">0%</em></button>
         </div>
       </article>
       <div class="network-stat-grid" id="networkStatGrid">
@@ -206,6 +208,6 @@
   <div id="toastContainer"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-  <script src="dashboard.js?v=20260904-1"></script>
+  <script src="dashboard.js?v=20260905-1"></script>
 </body>
 </html>
