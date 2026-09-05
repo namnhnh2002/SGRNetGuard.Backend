@@ -297,18 +297,6 @@ public class TelemetryClient
                secondOctet is >= 16 and <= 31;
     }
 
-    private static async Task<string?> GetPublicIpAddressAsync()
-    {
-        try
-        {
-            return (await _publicIpHttp.GetStringAsync("https://api.ipify.org?format=text")).Trim();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static readonly HttpClient _publicIpHttp = new() { Timeout = TimeSpan.FromSeconds(5) };
 }
 
@@ -349,7 +337,7 @@ public class TelemetryClient
                 DiskPercent = diskPercent,
                 NetworkLatencyMs = networkLatencyMs,
                 LanIp = GetPrivateLanIp(),
-                PublicIp = await GetPublicIpAddressAsync(),
+                PublicIp = null,
                 AdJoined = adJoined,
                 TrellixInstalled = trellixInstalled,
                 DesktopCentralInstalled = desktopCentralInstalled

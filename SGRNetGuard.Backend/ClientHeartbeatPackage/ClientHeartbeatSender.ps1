@@ -68,17 +68,6 @@ function Get-PrivateLanIp {
     }
 }
 
-function Get-PublicIpAddress {
-    try {
-        $result = Invoke-RestMethod -Uri "https://api.ipify.org?format=text" -Method Get -TimeoutSec 10
-        if ($null -ne $result) { return [string]$result.Trim() }
-        return ""
-    }
-    catch {
-        return ""
-    }
-}
-
 function Get-MacAddress {
     try {
         $mac = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True" -ErrorAction Stop |
