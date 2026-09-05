@@ -166,6 +166,7 @@ public class TelemetryClient
             ? configuredUrl
             : "https://sgrnetguard-backend.onrender.com";
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private readonly RemoteConfigClient _remoteConfig = new();
 
     /// <summary>
     /// Gọi hàm này ngay tại chỗ code hiện tại của bạn đang hiển thị
@@ -203,19 +204,22 @@ public class TelemetryClient
     {
         try
         {
+            var lanIp = GetPrivateLanIp();
+            var currentSite = await ResolveCurrentSiteAsync(lanIp);
+
             using var response = await _http.PostAsJsonAsync($"{ApiBaseUrl}/api/heartbeat", new
             {
                 DeviceName = Environment.MachineName,
                 ComputerName = Environment.MachineName,
-                SiteName = siteName,
-                Region = region,
-                IsInternal = isInternal,
+                SiteName = currentSite?.Site,
+                Region = currentSite?.Region,
+                IsInternal = currentSite != null,
                 AppVersion = typeof(TelemetryClient).Assembly.GetName().Version?.ToString(),
                 CpuPercent = cpuPercent,
                 RamPercent = ramPercent,
                 DiskPercent = diskPercent,
                 NetworkLatencyMs = networkLatencyMs,
-                LanIp = GetPrivateLanIp(),
+                LanIp = lanIp,
                 // Public IP is optional; never block heartbeat delivery on an external lookup.
                 PublicIp = null,
                 AdJoined = adJoined,
@@ -228,6 +232,48 @@ public class TelemetryClient
         {
             // Telemetry must never interrupt the agent's main workflow.
         }
+    }
+
+    private async Task<SiteRemoteDto?> ResolveCurrentSiteAsync(string? lanIp)
+    {
+        if (string.IsNullOrWhiteSpace(lanIp)) return null;
+        if (_remoteConfig.Current == null && !await _remoteConfig.LoadAsync()) return null;
+
+        if (!IPAddress.TryParse(lanIp, out var address) || address.AddressFamily != AddressFamily.InterNetwork)
+            return null;
+
+        return _remoteConfig.Current!.Sites
+            .Where(site => IsIpInSubnet(address, site.Subnet))
+            .OrderByDescending(site => GetSubnetPrefixLength(site.Subnet))
+            .FirstOrDefault();
+    }
+
+    private static int GetSubnetPrefixLength(string subnet)
+    {
+        var parts = subnet.Split('/', 2, StringSplitOptions.TrimEntries);
+        return parts.Length == 2 && int.TryParse(parts[1], out var prefixLength) ? prefixLength : -1;
+    }
+
+    private static bool IsIpInSubnet(IPAddress address, string subnet)
+    {
+        var parts = subnet.Split('/', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || !IPAddress.TryParse(parts[0], out var network) ||
+            network.AddressFamily != AddressFamily.InterNetwork ||
+            !int.TryParse(parts[1], out var prefixLength) || prefixLength is < 0 or > 32)
+            return false;
+
+        var addressBytes = address.GetAddressBytes();
+        var networkBytes = network.GetAddressBytes();
+        var fullBytes = prefixLength / 8;
+        var remainingBits = prefixLength % 8;
+        for (var index = 0; index < fullBytes; index++)
+        {
+            if (addressBytes[index] != networkBytes[index]) return false;
+        }
+
+        return remainingBits == 0 ||
+               (addressBytes[fullBytes] & (byte)(0xff << (8 - remainingBits))) ==
+               (networkBytes[fullBytes] & (byte)(0xff << (8 - remainingBits)));
     }
 
     [SupportedOSPlatform("windows")]
