@@ -208,7 +208,6 @@ function Send-Heartbeat {
     $disk = Get-CurrentDiskPercent
     $isInternal = Test-IsInternalNetwork
     $lanIp = Get-PrivateLanIp
-    $publicIp = Get-PublicIpAddress
     $macAddress = Get-MacAddress
     $cpuModel = Get-CpuModel
     $ramTotal = Get-RamTotalText
@@ -240,7 +239,7 @@ function Send-Heartbeat {
         desktopCentralInstalled = $true
         loggedInUser = $env:USERNAME
         lanIp = $lanIp
-        publicIp = $publicIp
+        publicIp = ""
         domain = ""
         windowsVersion = $windowsVersionText
         serialNumber = ""

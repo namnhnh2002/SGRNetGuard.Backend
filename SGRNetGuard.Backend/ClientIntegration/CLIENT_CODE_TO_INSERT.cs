@@ -216,7 +216,8 @@ public class TelemetryClient
                 DiskPercent = diskPercent,
                 NetworkLatencyMs = networkLatencyMs,
                 LanIp = GetPrivateLanIp(),
-                PublicIp = await GetPublicIpAddressAsync(),
+                // Public IP is optional; never block heartbeat delivery on an external lookup.
+                PublicIp = null,
                 AdJoined = adJoined,
                 TrellixInstalled = trellixInstalled,
                 DesktopCentralInstalled = desktopCentralInstalled
