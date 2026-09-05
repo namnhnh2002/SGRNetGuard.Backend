@@ -84,7 +84,6 @@ public class SqlDataAccess
 
     private static bool ResolveIsInternal(bool isInternal, string? lanIp, string? publicIp, string? siteName, string? region)
     {
-        if (!string.IsNullOrWhiteSpace(siteName) || !string.IsNullOrWhiteSpace(region)) return true;
         return isInternal;
     }
     public async Task<RemoteConfigDto> GetActiveConfigAsync()
