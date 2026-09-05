@@ -187,6 +187,10 @@ function Test-IsInternalNetwork {
         if ($override -match '^(0|false|no)$') { return $false }
     }
 
+    if (-not [string]::IsNullOrWhiteSpace((Get-PrivateLanIp))) {
+        return $true
+    }
+
     try {
         $profiles = Get-NetConnectionProfile -ErrorAction Stop
         if ($profiles | Where-Object { $_.Name -eq "SGR-OFFICE" }) { return $true }
