@@ -1,5 +1,6 @@
 SGR NetGuard Heartbeat Agent
 ============================
+Release: v20260905.1
 
 This package sends the user computer heartbeat to:
 https://sgrnetguard-backend.onrender.com
