@@ -226,10 +226,10 @@ public class SqlDataAccess
         var resolvedDeviceId = ResolveDeviceId(dto.DeviceId, dto.ComputerName ?? dto.DeviceName, dto.MacAddress);
         var effectiveDeviceName = string.IsNullOrWhiteSpace(dto.ComputerName) ? dto.DeviceName : dto.ComputerName;
         var resolvedSite = await ResolveSiteAsync(conn, tx, dto.LanIp);
-        var hasLanIp = !string.IsNullOrWhiteSpace(dto.LanIp);
-        var effectiveIsInternal = resolvedSite is not null || (!hasLanIp && dto.IsInternal);
-        var effectiveSiteName = resolvedSite?.Site ?? (effectiveIsInternal ? dto.SiteName : null);
-        var effectiveRegion = resolvedSite?.Region ?? (effectiveIsInternal ? dto.Region : null);
+        var hasAppSite = !string.IsNullOrWhiteSpace(dto.SiteName) && !string.IsNullOrWhiteSpace(dto.Region);
+        var effectiveIsInternal = hasAppSite ? dto.IsInternal : resolvedSite is not null;
+        var effectiveSiteName = hasAppSite ? dto.SiteName : resolvedSite?.Site;
+        var effectiveRegion = hasAppSite ? dto.Region : resolvedSite?.Region;
 
         await conn.ExecuteAsync(
             @"INSERT INTO public.Devices (DeviceId, MACAddress, ComputerName, CurrentUser, CurrentDepartment, CurrentLocation, OperatingSystem, FirstSeen, LastSeen, Status)
