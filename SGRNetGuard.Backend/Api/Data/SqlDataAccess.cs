@@ -227,7 +227,10 @@ public class SqlDataAccess
         var effectiveDeviceName = string.IsNullOrWhiteSpace(dto.ComputerName) ? dto.DeviceName : dto.ComputerName;
         var resolvedSite = await ResolveSiteAsync(conn, tx, dto.LanIp);
         var hasAppSite = !string.IsNullOrWhiteSpace(dto.SiteName) && !string.IsNullOrWhiteSpace(dto.Region);
-        var effectiveIsInternal = hasAppSite ? dto.IsInternal : resolvedSite is not null;
+        // A site/region reported by the desktop app is the source of truth for the
+        // dashboard. The client may legitimately have a different DNS configuration
+        // at a site, so dto.IsInternal must not discard a valid app site.
+        var effectiveIsInternal = hasAppSite || resolvedSite is not null;
         var effectiveSiteName = hasAppSite ? dto.SiteName : resolvedSite?.Site;
         var effectiveRegion = hasAppSite ? dto.Region : resolvedSite?.Region;
 
