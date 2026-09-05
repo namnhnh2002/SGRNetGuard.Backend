@@ -82,8 +82,9 @@ public class SqlDataAccess
                (bytes[0] == 169 && bytes[1] == 254);
     }
 
-    private static bool ResolveIsInternal(bool isInternal, string? lanIp, string? publicIp)
+    private static bool ResolveIsInternal(bool isInternal, string? lanIp, string? publicIp, string? siteName, string? region)
     {
+        if (!string.IsNullOrWhiteSpace(siteName) || !string.IsNullOrWhiteSpace(region)) return true;
         return isInternal;
     }
     public async Task<RemoteConfigDto> GetActiveConfigAsync()
@@ -164,7 +165,7 @@ public class SqlDataAccess
 
         var resolvedDeviceId = ResolveDeviceId(dto.DeviceId, dto.ComputerName ?? dto.DeviceName, dto.MacAddress);
         var effectiveDeviceName = string.IsNullOrWhiteSpace(dto.ComputerName) ? dto.DeviceName : dto.ComputerName;
-        var effectiveIsInternal = ResolveIsInternal(dto.IsInternal, dto.LanIp, dto.PublicIp);
+        var effectiveIsInternal = ResolveIsInternal(dto.IsInternal, dto.LanIp, dto.PublicIp, dto.SiteName, dto.Region);
 
         await conn.ExecuteAsync(
             @"INSERT INTO public.Devices (DeviceId, MACAddress, ComputerName, CurrentUser, CurrentDepartment, CurrentLocation, OperatingSystem, FirstSeen, LastSeen, Status)

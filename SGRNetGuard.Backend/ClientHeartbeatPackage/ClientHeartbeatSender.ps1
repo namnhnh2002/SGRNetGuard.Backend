@@ -187,13 +187,22 @@ function Test-IsInternalNetwork {
         if ($override -match '^(0|false|no)$') { return $false }
     }
 
+    try {
+        $profiles = Get-NetConnectionProfile -ErrorAction Stop
+        if ($profiles | Where-Object {
+            $_.Name -eq "SGR-OFFICE" -or
+            $_.NetworkCategory -in @("Private", "DomainAuthenticated")
+        }) { return $true }
+    }
+    catch {
+        # Continue with address detection when the profile API is unavailable.
+    }
+
     if (-not [string]::IsNullOrWhiteSpace((Get-PrivateLanIp))) {
         return $true
     }
 
     try {
-        $profiles = Get-NetConnectionProfile -ErrorAction Stop
-        if ($profiles | Where-Object { $_.Name -eq "SGR-OFFICE" }) { return $true }
         return $false
     }
     catch {
