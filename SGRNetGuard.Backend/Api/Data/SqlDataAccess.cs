@@ -223,8 +223,8 @@ public class SqlDataAccess
         await conn.OpenAsync();
         using var tx = conn.BeginTransaction();
 
-        var resolvedDeviceId = ResolveDeviceId(dto.DeviceId, dto.ComputerName ?? dto.DeviceName, dto.MacAddress);
-        var effectiveDeviceName = string.IsNullOrWhiteSpace(dto.ComputerName) ? dto.DeviceName : dto.ComputerName;
+        var resolvedDeviceId = ResolveDeviceId(dto.DeviceId, dto.DeviceName, dto.MacAddress);
+        var effectiveDeviceName = dto.DeviceName;
         var resolvedSite = await ResolveSiteAsync(conn, tx, dto.LanIp);
         var hasAppSite = !string.IsNullOrWhiteSpace(dto.SiteName) && !string.IsNullOrWhiteSpace(dto.Region);
         // A site/region reported by the desktop app is the source of truth for the
