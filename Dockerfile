@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 COPY SGRNetGuard.Backend/Api/SGRNetGuard.Api.csproj SGRNetGuard.Backend/Api/
+COPY SGRNetGuard.Backend/Database/ SGRNetGuard.Backend/Database/
 RUN dotnet restore SGRNetGuard.Backend/Api/SGRNetGuard.Api.csproj
 
 COPY SGRNetGuard.Backend/Api/ SGRNetGuard.Backend/Api/
