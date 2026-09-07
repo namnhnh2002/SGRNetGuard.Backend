@@ -230,12 +230,13 @@ function renderNetworkDashboard() {
     .slice(0, remainingPercentage)
     .forEach(region => roundedPercentages[region]++);
 
+  const ratio = value => `${value}/${total}`;
   [
     ["summaryTotal", total], ["cardTotal", total], ["summaryVmb", values.VMB], ["cardVmb", values.VMB],
     ["summaryVmt", values.VMT], ["cardVmt", values.VMT], ["summaryVmn", values.VMN], ["cardVmn", values.VMN],
     ["summaryUnknown", values.unknown],
-    ["cardCompliant", Number(summary.compliant || 0)], ["cardNonCompliant", Number(summary.nonCompliant || 0)],
-    ["cardInternal", Number(summary.internalNetwork || 0)], ["cardExternal", Number(summary.externalNetwork || 0)]
+    ["cardCompliant", ratio(Number(summary.compliant || 0))], ["cardNonCompliant", ratio(Number(summary.nonCompliant || 0))],
+    ["cardInternal", ratio(Number(summary.internalNetwork || 0))], ["cardExternal", ratio(Number(summary.externalNetwork || 0))]
   ].forEach(([id, value]) => {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
@@ -276,8 +277,8 @@ function renderStats() {
   document.getElementById("statTotal").textContent = total;
   document.getElementById("statOnline").textContent = online;
   document.getElementById("statWarnToday").textContent = warnToday;
-  document.getElementById("statNonCompliant").textContent = nonCompliant;
-  document.getElementById("statExternal").textContent = external;
+  document.getElementById("statNonCompliant").textContent = `${nonCompliant}/${total}`;
+  document.getElementById("statExternal").textContent = `${external}/${total}`;
 }
 
 function openTodayWarningsModal() {
