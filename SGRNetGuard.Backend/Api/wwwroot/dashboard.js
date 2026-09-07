@@ -236,7 +236,8 @@ function renderNetworkDashboard() {
     ["summaryVmt", values.VMT], ["cardVmt", values.VMT], ["summaryVmn", values.VMN], ["cardVmn", values.VMN],
     ["summaryUnknown", values.unknown],
     ["cardCompliant", ratio(Number(summary.compliant || 0))], ["cardNonCompliant", ratio(Number(summary.nonCompliant || 0))],
-    ["cardInternal", ratio(Number(summary.internalNetwork || 0))], ["cardExternal", ratio(Number(summary.externalNetwork || 0))]
+    ["cardInternal", ratio(Number(summary.internalNetwork || 0))], ["cardExternal", ratio(Number(summary.externalNetwork || 0))],
+    ["cardVmb", ratio(values.VMB)], ["cardVmt", ratio(values.VMT)], ["cardVmn", ratio(values.VMN)]
   ].forEach(([id, value]) => {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
