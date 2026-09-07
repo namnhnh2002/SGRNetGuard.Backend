@@ -298,9 +298,9 @@ public class SqlDataAccess
                           END,
                           CURRENT_TIMESTAMP)
                   ON CONFLICT (DeviceName) DO UPDATE SET
-                      LastSiteName = CASE WHEN EXCLUDED.IsInternal THEN COALESCE(NULLIF(EXCLUDED.LastSiteName, ''), public.DeviceHeartbeats.LastSiteName) ELSE NULL END,
-                      LastRegion = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN EXCLUDED.LastRegion ELSE CASE WHEN EXCLUDED.IsInternal THEN public.DeviceHeartbeats.LastRegion ELSE NULL END END,
-                      LastInternalSeenUtc = CASE WHEN EXCLUDED.IsInternal AND EXCLUDED.LastRegion IS NOT NULL THEN CURRENT_TIMESTAMP ELSE CASE WHEN EXCLUDED.IsInternal THEN public.DeviceHeartbeats.LastInternalSeenUtc ELSE NULL END END,
+                      LastSiteName = CASE WHEN EXCLUDED.IsInternal THEN COALESCE(NULLIF(EXCLUDED.LastSiteName, ''), public.DeviceHeartbeats.LastSiteName) ELSE public.DeviceHeartbeats.LastSiteName END,
+                      LastRegion = CASE WHEN EXCLUDED.IsInternal AND NULLIF(EXCLUDED.LastRegion, '') IS NOT NULL THEN EXCLUDED.LastRegion ELSE public.DeviceHeartbeats.LastRegion END,
+                      LastInternalSeenUtc = CASE WHEN EXCLUDED.IsInternal AND NULLIF(EXCLUDED.LastRegion, '') IS NOT NULL THEN CURRENT_TIMESTAMP ELSE public.DeviceHeartbeats.LastInternalSeenUtc END,
                       IsInternal = EXCLUDED.IsInternal,
                       AppVersion = EXCLUDED.AppVersion,
                       CpuPercent = EXCLUDED.CpuPercent,
@@ -435,9 +435,9 @@ public class SqlDataAccess
 
         await conn.ExecuteAsync(
             @"UPDATE public.DeviceHeartbeats
-              SET LastSiteName = CASE WHEN @IsInternal THEN @SiteName ELSE NULL END,
-                  LastRegion = CASE WHEN @IsInternal THEN @Region ELSE NULL END,
-                  LastInternalSeenUtc = CASE WHEN @IsInternal THEN CURRENT_TIMESTAMP ELSE NULL END,
+              SET LastSiteName = CASE WHEN @IsInternal THEN COALESCE(NULLIF(@SiteName, ''), LastSiteName) ELSE LastSiteName END,
+                  LastRegion = CASE WHEN @IsInternal AND NULLIF(@Region, '') IS NOT NULL THEN @Region ELSE LastRegion END,
+                  LastInternalSeenUtc = CASE WHEN @IsInternal AND NULLIF(@Region, '') IS NOT NULL THEN CURRENT_TIMESTAMP ELSE LastInternalSeenUtc END,
                   IsInternal = @IsInternal,
                   NetworkType = @ConnectionType,
                   WifiSignalDbm = CASE WHEN @ConnectionType = 'WiFi' THEN @SignalStrengthDbm ELSE NULL END,
