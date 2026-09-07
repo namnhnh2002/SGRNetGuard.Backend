@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SGR NetGuard - IT Dashboard</title>
-<link rel="stylesheet" href="style.css?v=20260817-2" />
+<link rel="stylesheet" href="style.css?v=20260907-1" />
 </head>
 <body>
   <header class="topbar">
@@ -141,28 +141,30 @@
   </section>
 
   <main>
-    <table id="deviceTable">
-      <thead>
-        <tr>
-          <th class="select-col"><input type="checkbox" id="selectAllRows" title="Chọn tất cả dòng đang hiển thị" /></th>
-          <th>Trạng thái</th>
-          <th>Tên máy</th>
-          <th>Site</th>
-          <th>Vùng</th>
-          <th>Mạng</th>
-          <th>Tín hiệu</th>
-          <th>CPU</th>
-          <th>RAM</th>
-          <th>Disk</th>
-          <th>ANBM</th>
-          <th>Cảnh báo hôm nay</th>
-          <th>Cập nhật gần nhất</th>
-        </tr>
-      </thead>
-      <tbody id="deviceTableBody">
-        <tr><td colspan="13" class="empty-row">Đang tải dữ liệu...</td></tr>
-      </tbody>
-    </table>
+    <div class="device-table-scroll">
+      <table id="deviceTable">
+        <thead>
+          <tr>
+            <th class="select-col"><input type="checkbox" id="selectAllRows" title="Chọn tất cả dòng đang hiển thị" /></th>
+            <th>Trạng thái</th>
+            <th>Tên máy</th>
+            <th>Site</th>
+            <th>Vùng</th>
+            <th>Mạng</th>
+            <th>Tín hiệu</th>
+            <th>CPU</th>
+            <th>RAM</th>
+            <th>Disk</th>
+            <th>ANBM</th>
+            <th>Cảnh báo hôm nay</th>
+            <th>Cập nhật gần nhất</th>
+          </tr>
+        </thead>
+        <tbody id="deviceTableBody">
+          <tr><td colspan="13" class="empty-row">Đang tải dữ liệu...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </main>
 
   <section class="network-dashboard" id="networkDashboard" aria-label="Tổng quan Network Security">

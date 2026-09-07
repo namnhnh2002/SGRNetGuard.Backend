@@ -347,7 +347,22 @@ table {
   box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
 
+.device-table-scroll {
+  max-height: 520px;
+  overflow: auto;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+.device-table-scroll table {
+  margin: 0;
+  box-shadow: none;
+}
+
 thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: #F8F9FC;
   text-align: left;
   padding: 12px 14px;
