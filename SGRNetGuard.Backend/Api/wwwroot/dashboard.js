@@ -11,6 +11,23 @@ let lastFilteredDeviceNames = [];
 let dashboardSummary = null;
 let summaryFilter = "all";
 
+const displayedRegionAssignments = {
+  GREFRANKLI: "VMB",
+  RAVIJA: "VMB",
+  MARWAL: "VMB",
+  LINDAHALL: "VMB",
+  JOANNA: "VMB",
+  QWEST: "VMB",
+  SAMROSS: "VMN",
+  ANGRAHAM: "VMN",
+  DAPERE: "VMN",
+  TERMILL: "VMN"
+};
+
+function displayRegion(device) {
+  return displayedRegionAssignments[device.deviceName?.toUpperCase()] || device.lastRegion || "";
+}
+
 const demoDevices = [
   {
     deviceName: "HNI-SCG-WS01",
@@ -198,9 +215,9 @@ function renderNetworkDashboard() {
   const fallback = {
     totalComputers: allDevices.length,
     regions: {
-      VMB: allDevices.filter(device => device.lastRegion === "VMB").length,
-      VMT: allDevices.filter(device => device.lastRegion === "VMT").length,
-      VMN: allDevices.filter(device => device.lastRegion === "VMN").length
+      VMB: allDevices.filter(device => displayRegion(device) === "VMB").length,
+      VMT: allDevices.filter(device => displayRegion(device) === "VMT").length,
+      VMN: allDevices.filter(device => displayRegion(device) === "VMN").length
     },
     compliant: allDevices.filter(isCompliant).length,
     nonCompliant: allDevices.filter(isNonCompliant).length,
@@ -208,12 +225,11 @@ function renderNetworkDashboard() {
     externalNetwork: allDevices.filter(device => !device.isInternal).length
   };
   const summary = dashboardSummary || fallback;
-  const regions = summary.regions || {};
   const total = Number(summary.totalComputers || 0);
   const values = {
-    VMB: Number(regions.VMB ?? regions.vmb ?? 0),
-    VMT: Number(regions.VMT ?? regions.vmt ?? 0),
-    VMN: Number(regions.VMN ?? regions.vmn ?? 0)
+    VMB: allDevices.filter(device => displayRegion(device).toUpperCase() === "VMB").length,
+    VMT: allDevices.filter(device => displayRegion(device).toUpperCase() === "VMT").length,
+    VMN: allDevices.filter(device => displayRegion(device).toUpperCase() === "VMN").length
   };
   values.unknown = Math.max(0, total - values.VMB - values.VMT - values.VMN);
   const regionNames = ["VMB", "VMT", "VMN", "unknown"];
@@ -222,7 +238,7 @@ function renderNetworkDashboard() {
     total > 0 ? (values[region] / total) * 100 : 0
   ]));
   const compliance = Object.fromEntries(regionNames.map(region => {
-    const regionDevices = allDevices.filter(device => (device.lastRegion || "unknown").toUpperCase() === region.toUpperCase());
+    const regionDevices = allDevices.filter(device => (displayRegion(device) || "unknown").toUpperCase() === region.toUpperCase());
     const compliant = regionDevices.filter(isCompliant).length;
     return [region, { compliant, nonCompliant: regionDevices.length - compliant }];
   }));
@@ -420,12 +436,12 @@ function renderTable(emptyMessage) {
 
   let filtered = allDevices.filter(d => {
     if (search && !(`${d.deviceName} ${d.lastSiteName ?? ""}`.toLowerCase().includes(search))) return false;
-    if (region && d.lastRegion !== region) return false;
+    if (region && displayRegion(d) !== region) return false;
     if (status === "online" && !d.isOnline) return false;
     if (status === "offline" && d.isOnline) return false;
     if (status === "noncompliant" && !isNonCompliant(d)) return false;
-    if (["VMB", "VMT", "VMN"].includes(summaryFilter) && d.lastRegion !== summaryFilter) return false;
-    if (summaryFilter === "unknown" && d.lastRegion) return false;
+    if (["VMB", "VMT", "VMN"].includes(summaryFilter) && displayRegion(d) !== summaryFilter) return false;
+    if (summaryFilter === "unknown" && displayRegion(d)) return false;
     if (summaryFilter === "compliant" && isNonCompliant(d)) return false;
     if (summaryFilter === "noncompliant" && !isNonCompliant(d)) return false;
     if (summaryFilter === "internal" && !d.isInternal) return false;
@@ -460,7 +476,7 @@ function renderTable(emptyMessage) {
       </td>
       <td><a class="device-link" href="/device.html?device=${encodeURIComponent(d.deviceName)}"><strong>${escapeHtml(d.deviceName)}</strong></a></td>
       <td>${escapeHtml(displaySiteName(d.lastSiteName))}</td>
-      <td>${escapeHtml(d.lastRegion || "-")}</td>
+      <td>${escapeHtml(displayRegion(d) || "-")}</td>
       <td>${d.isInternal ? "🟢 Nội bộ" : "🔴 Ngoài"}</td>
       <td>${formatConnection(d)}</td>
       <td class="metric ${metricClass(d.cpuPercent)}">${fmtPercent(d.cpuPercent)}</td>
