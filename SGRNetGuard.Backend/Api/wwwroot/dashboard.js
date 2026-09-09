@@ -280,7 +280,7 @@ function renderNetworkDashboard() {
       const value = compliance[region][status === "compliant" ? "compliant" : "nonCompliant"];
       const shareOfTotal = total > 0 ? value / total : 0;
       const midpoint = labelOffset + shareOfTotal / 2;
-      const angle = midpoint * Math.PI * 2 - Math.PI / 2;
+      const angle = midpoint * Math.PI * 2;
       const label = document.querySelector(`[data-percentage-label="${region}-${status}"]`);
       if (!label) return;
       const percentage = status === "compliant" ? compliantPercentage : Math.max(0, 100 - compliantPercentage);
