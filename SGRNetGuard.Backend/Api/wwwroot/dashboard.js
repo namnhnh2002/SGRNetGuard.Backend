@@ -278,7 +278,7 @@ function renderNetworkDashboard() {
     });
   };
 
-  setRingSegments(region => `.donut-ring-inner .donut-${region.toLowerCase()}`, 62,
+  setRingSegments(region => `.donut-ring-inner .donut-${region.toLowerCase()}`, 60,
     regionNames.map(region => ({ region, value: values[region] })));
 
   setRingSegments((region, status) => `.donut-ring-outer [data-region="${region}"][data-status="${status}"]`, 82,
