@@ -776,6 +776,12 @@ async function exportSelectedDevices() {
 
 // ---------------- Init ----------------
 
+const networkDashboard = document.getElementById("networkDashboard");
+const deviceMain = document.querySelector("main");
+if (networkDashboard && deviceMain) {
+  deviceMain.parentNode.insertBefore(networkDashboard, deviceMain);
+}
+
 document.getElementById("searchBox").addEventListener("input", renderTable);
 document.getElementById("regionFilter").addEventListener("change", () => {
   summaryFilter = "all";
