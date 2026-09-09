@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SGR NetGuard - IT Dashboard</title>
-<link rel="stylesheet" href="style.css?v=20260907-2" />
+<link rel="stylesheet" href="style.css?v=20260909-chart-1" />
 </head>
 <body>
   <header class="topbar">
@@ -178,12 +178,25 @@
     <div class="network-dashboard-grid">
       <article class="network-donut-panel">
         <div class="network-donut-wrap">
-          <svg class="network-donut" viewBox="0 0 220 220" role="img" aria-label="Tỷ lệ thiết bị theo vùng">
-            <circle class="donut-track" cx="110" cy="110" r="82"></circle>
-            <circle class="donut-segment donut-vmb" data-region="VMB" cx="110" cy="110" r="82"></circle>
-            <circle class="donut-segment donut-vmt" data-region="VMT" cx="110" cy="110" r="82"></circle>
-            <circle class="donut-segment donut-vmn" data-region="VMN" cx="110" cy="110" r="82"></circle>
-            <circle class="donut-segment donut-unknown" data-region="unknown" cx="110" cy="110" r="82"></circle>
+          <svg class="network-donut" viewBox="0 0 220 220" role="img" aria-label="Tỷ lệ thiết bị theo vùng và tình trạng tuân thủ">
+            <circle class="donut-track donut-track-outer" cx="110" cy="110" r="82"></circle>
+            <circle class="donut-track donut-track-inner" cx="110" cy="110" r="62"></circle>
+            <g class="donut-ring donut-ring-outer" aria-hidden="true">
+              <circle class="donut-segment donut-compliant" data-ring="outer" data-region="VMB" data-status="compliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-noncompliant" data-ring="outer" data-region="VMB" data-status="noncompliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-compliant" data-ring="outer" data-region="VMT" data-status="compliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-noncompliant" data-ring="outer" data-region="VMT" data-status="noncompliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-compliant" data-ring="outer" data-region="VMN" data-status="compliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-noncompliant" data-ring="outer" data-region="VMN" data-status="noncompliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-compliant" data-ring="outer" data-region="unknown" data-status="compliant" cx="110" cy="110" r="82"></circle>
+              <circle class="donut-segment donut-noncompliant" data-ring="outer" data-region="unknown" data-status="noncompliant" cx="110" cy="110" r="82"></circle>
+            </g>
+            <g class="donut-ring donut-ring-inner">
+              <circle class="donut-segment donut-vmb" data-ring="inner" data-region="VMB" cx="110" cy="110" r="62"></circle>
+              <circle class="donut-segment donut-vmt" data-ring="inner" data-region="VMT" cx="110" cy="110" r="62"></circle>
+              <circle class="donut-segment donut-vmn" data-ring="inner" data-region="VMN" cx="110" cy="110" r="62"></circle>
+              <circle class="donut-segment donut-unknown" data-ring="inner" data-region="unknown" cx="110" cy="110" r="62"></circle>
+            </g>
           </svg>
           <div class="donut-center"><strong id="summaryTotal">0</strong><span>TỔNG SỐ MÁY</span></div>
         </div>
@@ -192,6 +205,7 @@
           <button class="legend-item" data-summary-filter="VMT"><i class="legend-vmt"></i><span>VMT</span><strong id="summaryVmt">0</strong><em id="summaryVmtPercent">0%</em></button>
           <button class="legend-item" data-summary-filter="VMN"><i class="legend-vmn"></i><span>VMN</span><strong id="summaryVmn">0</strong><em id="summaryVmnPercent">0%</em></button>
           <button class="legend-item" data-summary-filter="unknown"><i class="legend-unknown"></i><span>Chưa xác định vùng</span><strong id="summaryUnknown">0</strong><em id="summaryUnknownPercent">0%</em></button>
+          <div class="donut-status-legend"><span><i class="legend-compliant"></i>Tuân thủ ANBM</span><span><i class="legend-noncompliant"></i>Chưa tuân thủ ANBM</span></div>
         </div>
       </article>
       <div class="network-stat-grid" id="networkStatGrid">
@@ -210,6 +224,6 @@
   <div id="toastContainer"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-  <script src="dashboard.js?v=20260907-1"></script>
+  <script src="dashboard.js?v=20260909-chart-1"></script>
 </body>
 </html>

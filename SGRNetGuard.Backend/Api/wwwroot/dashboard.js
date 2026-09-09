@@ -221,6 +221,11 @@ function renderNetworkDashboard() {
     region,
     total > 0 ? (values[region] / total) * 100 : 0
   ]));
+  const compliance = Object.fromEntries(regionNames.map(region => {
+    const regionDevices = allDevices.filter(device => (device.lastRegion || "unknown").toUpperCase() === region.toUpperCase());
+    const compliant = regionDevices.filter(device => !isNonCompliant(device)).length;
+    return [region, { compliant, nonCompliant: regionDevices.length - compliant }];
+  }));
   const roundedPercentages = Object.fromEntries(regionNames.map(region => [region, Math.floor(percentages[region])]));
   let remainingPercentage = total > 0
     ? 100 - regionNames.reduce((sum, region) => sum + roundedPercentages[region], 0)
@@ -243,17 +248,28 @@ function renderNetworkDashboard() {
     if (element) element.textContent = value;
   });
 
-  const circumference = 2 * Math.PI * 82;
-  let offset = 0;
-  regionNames.forEach(region => {
-    const segment = document.querySelector(`.donut-${region.toLowerCase()}`);
-    if (!segment) return;
-    const length = total > 0 ? (values[region] / total) * circumference : 0;
-    segment.style.strokeDasharray = `${length} ${circumference - length}`;
-    segment.style.strokeDashoffset = `${-offset}`;
-    offset += length;
-    segment.classList.toggle("is-selected", summaryFilter === region);
-  });
+  const setRingSegments = (selector, radius, segments) => {
+    const circumference = 2 * Math.PI * radius;
+    let offset = 0;
+    segments.forEach(({ region, status, value }) => {
+      const segment = document.querySelector(selector(region, status));
+      if (!segment) return;
+      const length = total > 0 ? (value / total) * circumference : 0;
+      segment.style.strokeDasharray = `${length} ${circumference - length}`;
+      segment.style.strokeDashoffset = `${-offset}`;
+      offset += length;
+      segment.classList.toggle("is-selected", summaryFilter === region);
+    });
+  };
+
+  setRingSegments(region => `.donut-ring-inner .donut-${region.toLowerCase()}`, 62,
+    regionNames.map(region => ({ region, value: values[region] })));
+
+  setRingSegments((region, status) => `.donut-ring-outer [data-region="${region}"][data-status="${status}"]`, 82,
+    regionNames.flatMap(region => [
+      { region, status: "compliant", value: compliance[region].compliant },
+      { region, status: "noncompliant", value: compliance[region].nonCompliant }
+    ]));
 
   [
     ["summaryVmbPercent", roundedPercentages.VMB], ["summaryVmtPercent", roundedPercentages.VMT],
