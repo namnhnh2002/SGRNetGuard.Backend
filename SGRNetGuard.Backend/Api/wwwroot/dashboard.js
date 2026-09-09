@@ -285,8 +285,11 @@ function renderNetworkDashboard() {
       if (!label) return;
       const percentage = status === "compliant" ? compliantPercentage : Math.max(0, 100 - compliantPercentage);
       label.textContent = value > 0 ? `${percentage}%` : "";
-      label.setAttribute("x", `${110 + Math.cos(angle) * labelRadius}`);
-      label.setAttribute("y", `${110 + Math.sin(angle) * labelRadius}`);
+      const labelX = 110 + Math.cos(angle) * labelRadius;
+      const labelY = 110 + Math.sin(angle) * labelRadius;
+      label.setAttribute("x", `${labelX}`);
+      label.setAttribute("y", `${labelY}`);
+      label.setAttribute("transform", `rotate(90 ${labelX} ${labelY})`);
       labelOffset += shareOfTotal;
     });
   });
