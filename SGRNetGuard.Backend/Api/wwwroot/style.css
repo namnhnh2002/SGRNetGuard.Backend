@@ -306,6 +306,7 @@ main { padding: 20px 24px; }
 .donut-unknown { stroke: #a8b6c2; color: #a8b6c2; }
 .donut-compliant { stroke: #b2ec12; color: #b2ec12; }
 .donut-noncompliant { stroke: #f31e2a; color: #f31e2a; }
+.donut-percentage-labels text { fill: #fff; font-size: 7px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(0, 0, 0, .45); stroke-width: 2px; }
 .donut-center { position: absolute; inset: 27%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; background: #21445d; border-radius: 50%; }
 .donut-center strong { color: #fff; font-size: clamp(32px, 4vw, 48px); line-height: 1; }
 .donut-center span { margin-top: 8px; color: #8ca6bf; font-size: 10px; font-weight: 800; letter-spacing: .13em; }

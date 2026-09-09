@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SGR NetGuard - IT Dashboard</title>
-<link rel="stylesheet" href="style.css?v=20260909-chart-1" />
+<link rel="stylesheet" href="style.css?v=20260909-chart-2" />
 </head>
 <body>
   <header class="topbar">
@@ -197,6 +197,12 @@
               <circle class="donut-segment donut-vmn" data-ring="inner" data-region="VMN" cx="110" cy="110" r="62"></circle>
               <circle class="donut-segment donut-unknown" data-ring="inner" data-region="unknown" cx="110" cy="110" r="62"></circle>
             </g>
+            <g class="donut-percentage-labels" aria-hidden="true">
+              <text data-percentage-label="VMB-compliant"></text><text data-percentage-label="VMB-noncompliant"></text>
+              <text data-percentage-label="VMT-compliant"></text><text data-percentage-label="VMT-noncompliant"></text>
+              <text data-percentage-label="VMN-compliant"></text><text data-percentage-label="VMN-noncompliant"></text>
+              <text data-percentage-label="unknown-compliant"></text><text data-percentage-label="unknown-noncompliant"></text>
+            </g>
           </svg>
           <div class="donut-center"><strong id="summaryTotal">0</strong><span>TỔNG SỐ MÁY</span></div>
         </div>
@@ -224,6 +230,6 @@
   <div id="toastContainer"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-  <script src="dashboard.js?v=20260909-chart-1"></script>
+  <script src="dashboard.js?v=20260909-chart-2"></script>
 </body>
 </html>

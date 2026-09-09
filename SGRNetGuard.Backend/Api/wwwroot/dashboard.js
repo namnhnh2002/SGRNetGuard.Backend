@@ -271,6 +271,25 @@ function renderNetworkDashboard() {
       { region, status: "noncompliant", value: compliance[region].nonCompliant }
     ]));
 
+  const labelRadius = 82;
+  let labelOffset = 0;
+  regionNames.forEach(region => {
+    const regionTotal = compliance[region].compliant + compliance[region].nonCompliant;
+    ["compliant", "noncompliant"].forEach(status => {
+      const value = compliance[region][status === "compliant" ? "compliant" : "nonCompliant"];
+      const shareOfTotal = total > 0 ? value / total : 0;
+      const midpoint = labelOffset + shareOfTotal / 2;
+      const angle = midpoint * Math.PI * 2 - Math.PI / 2;
+      const label = document.querySelector(`[data-percentage-label="${region}-${status}"]`);
+      if (!label) return;
+      const percentage = regionTotal > 0 ? Math.round((value / regionTotal) * 100) : 0;
+      label.textContent = value > 0 ? `${percentage}%` : "";
+      label.setAttribute("x", `${110 + Math.cos(angle) * labelRadius}`);
+      label.setAttribute("y", `${110 + Math.sin(angle) * labelRadius}`);
+      labelOffset += shareOfTotal;
+    });
+  });
+
   [
     ["summaryVmbPercent", roundedPercentages.VMB], ["summaryVmtPercent", roundedPercentages.VMT],
     ["summaryVmnPercent", roundedPercentages.VMN], ["summaryUnknownPercent", roundedPercentages.unknown]
