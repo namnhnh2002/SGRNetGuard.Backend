@@ -202,7 +202,7 @@ function renderNetworkDashboard() {
       VMT: allDevices.filter(device => device.lastRegion === "VMT").length,
       VMN: allDevices.filter(device => device.lastRegion === "VMN").length
     },
-    compliant: allDevices.filter(device => !isNonCompliant(device)).length,
+    compliant: allDevices.filter(isCompliant).length,
     nonCompliant: allDevices.filter(isNonCompliant).length,
     internalNetwork: allDevices.filter(device => device.isInternal).length,
     externalNetwork: allDevices.filter(device => !device.isInternal).length
@@ -223,7 +223,7 @@ function renderNetworkDashboard() {
   ]));
   const compliance = Object.fromEntries(regionNames.map(region => {
     const regionDevices = allDevices.filter(device => (device.lastRegion || "unknown").toUpperCase() === region.toUpperCase());
-    const compliant = regionDevices.filter(device => !isNonCompliant(device)).length;
+    const compliant = regionDevices.filter(isCompliant).length;
     return [region, { compliant, nonCompliant: regionDevices.length - compliant }];
   }));
   const roundedPercentages = Object.fromEntries(regionNames.map(region => [region, Math.floor(percentages[region])]));
@@ -371,6 +371,10 @@ async function loadTodayWarnings() {
 
 function isNonCompliant(d) {
   return d.adJoined === false || d.trellixInstalled === false || d.desktopCentralInstalled === false;
+}
+
+function isCompliant(d) {
+  return d.adJoined === true && d.trellixInstalled === true && d.desktopCentralInstalled === true;
 }
 
 function metricClass(value) {
