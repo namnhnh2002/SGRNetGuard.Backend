@@ -275,6 +275,7 @@ function renderNetworkDashboard() {
   let labelOffset = 0;
   regionNames.forEach(region => {
     const regionTotal = compliance[region].compliant + compliance[region].nonCompliant;
+    const compliantPercentage = regionTotal > 0 ? Math.round((compliance[region].compliant / regionTotal) * 100) : 0;
     ["compliant", "noncompliant"].forEach(status => {
       const value = compliance[region][status === "compliant" ? "compliant" : "nonCompliant"];
       const shareOfTotal = total > 0 ? value / total : 0;
@@ -282,7 +283,7 @@ function renderNetworkDashboard() {
       const angle = midpoint * Math.PI * 2 - Math.PI / 2;
       const label = document.querySelector(`[data-percentage-label="${region}-${status}"]`);
       if (!label) return;
-      const percentage = regionTotal > 0 ? Math.round((value / regionTotal) * 100) : 0;
+      const percentage = status === "compliant" ? compliantPercentage : Math.max(0, 100 - compliantPercentage);
       label.textContent = value > 0 ? `${percentage}%` : "";
       label.setAttribute("x", `${110 + Math.cos(angle) * labelRadius}`);
       label.setAttribute("y", `${110 + Math.sin(angle) * labelRadius}`);
