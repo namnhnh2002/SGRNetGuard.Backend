@@ -285,6 +285,8 @@ app.MapGet("/style.css", () => Results.File(Path.Combine(webRootPath, "style.css
 app.MapGet("/dashboard.js", () => Results.File(Path.Combine(webRootPath, "dashboard.js"), "text/javascript"));
 app.MapGet("/device.js", () => Results.File(Path.Combine(webRootPath, "device.js"), "text/javascript"));
 app.MapGet("/agent.js", () => Results.File(Path.Combine(webRootPath, "agent.js"), "text/javascript"));
+app.MapGet("/dashboard", () => Results.File(Path.Combine(webRootPath, "dashboard.html"), "text/html; charset=utf-8"));
+app.MapGet("/devices", () => Results.File(Path.Combine(webRootPath, "devices.html"), "text/html; charset=utf-8"));
 
 static IResult DatabaseUnavailable(string message) => Results.Json(new
 {

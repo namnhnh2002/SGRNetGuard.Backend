@@ -116,7 +116,7 @@ function setDemoBanner(visible) {
 function loadDemoData() {
   isDemoMode = true;
   allDevices = demoDevices;
-  renderTable("Dữ liệu demo đang được hiển thị.");
+  if (document.getElementById("deviceTableBody")) renderTable("Dữ liệu demo đang được hiển thị.");
   renderStats();
   setConnStatus(false);
   setDemoBanner(true);
@@ -144,7 +144,7 @@ async function loadDevices() {
       const payload = await res.json().catch(() => null);
       allDevices = [];
       isDemoMode = false;
-      renderTable(payload?.message || "Database chưa sẵn sàng. Bấm 'Load demo data' để xem dữ liệu mẫu.");
+      if (document.getElementById("deviceTableBody")) renderTable(payload?.message || "Database chưa sẵn sàng. Bấm 'Load demo data' để xem dữ liệu mẫu.");
       renderStats();
       setConnStatus(false);
       setDemoBanner(true);
@@ -154,7 +154,7 @@ async function loadDevices() {
     if (!Array.isArray(data) || data.length === 0) {
       allDevices = [];
       isDemoMode = false;
-      renderTable("Chưa có máy nào trong database. Bấm 'Load demo data' để xem dữ liệu mẫu.");
+      if (document.getElementById("deviceTableBody")) renderTable("Chưa có máy nào trong database. Bấm 'Load demo data' để xem dữ liệu mẫu.");
       renderStats();
       setConnStatus(false);
       setDemoBanner(true);
@@ -169,15 +169,15 @@ async function loadDevices() {
       }
     }
     isDemoMode = false;
-    renderTable();
+    if (document.getElementById("deviceTableBody")) renderTable();
     renderStats();
-    renderNetworkDashboard();
+    if (document.getElementById("networkDashboard")) renderNetworkDashboard();
     setDemoBanner(false);
   } catch (err) {
     console.error("Không tải được danh sách máy:", err);
     allDevices = [];
     isDemoMode = false;
-    renderTable("Không tải được dữ liệu dashboard. Bấm 'Load demo data' để xem dữ liệu mẫu.");
+    if (document.getElementById("deviceTableBody")) renderTable("Không tải được dữ liệu dashboard. Bấm 'Load demo data' để xem dữ liệu mẫu.");
     renderStats();
     setConnStatus(false);
     setDemoBanner(true);
@@ -193,25 +193,29 @@ async function loadDashboardSummary() {
     }
     if (!response.ok) throw new Error(`Summary API returned ${response.status}`);
     dashboardSummary = await response.json();
-    renderNetworkDashboard();
+    if (document.getElementById("networkDashboard")) renderNetworkDashboard();
   } catch (error) {
     console.error("Không tải được tổng quan dashboard:", error);
     dashboardSummary = null;
-    renderNetworkDashboard();
+    if (document.getElementById("networkDashboard")) renderNetworkDashboard();
   }
 }
 
 function setSummaryFilter(filter) {
   summaryFilter = filter;
-  document.getElementById("searchBox").value = "";
-  document.getElementById("regionFilter").value = ["VMB", "VMT", "VMN"].includes(filter) ? filter : "";
-  document.getElementById("statusFilter").value = "";
-  renderTable();
-  renderNetworkDashboard();
-  document.getElementById("deviceTable").scrollIntoView({ behavior: "smooth", block: "start" });
+  const searchBox = document.getElementById("searchBox");
+  const regionFilter = document.getElementById("regionFilter");
+  const statusFilter = document.getElementById("statusFilter");
+  if (searchBox) searchBox.value = "";
+  if (regionFilter) regionFilter.value = ["VMB", "VMT", "VMN"].includes(filter) ? filter : "";
+  if (statusFilter) statusFilter.value = "";
+  if (document.getElementById("deviceTableBody")) renderTable();
+  if (document.getElementById("networkDashboard")) renderNetworkDashboard();
+  document.getElementById("deviceTable")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderNetworkDashboard() {
+  if (!document.getElementById("networkDashboard")) return;
   const fallback = {
     totalComputers: allDevices.length,
     regions: {
@@ -330,11 +334,8 @@ function renderStats() {
   const nonCompliant = allDevices.filter(isNonCompliant).length;
   const external = allDevices.filter(d => d.externalNetworkStatus === "External" || d.isInternal === false).length;
 
-  document.getElementById("statTotal").textContent = total;
-  document.getElementById("statOnline").textContent = online;
-  document.getElementById("statWarnToday").textContent = warnToday;
-  document.getElementById("statNonCompliant").textContent = `${nonCompliant}/${total}`;
-  document.getElementById("statExternal").textContent = `${external}/${total}`;
+  const values = [["statTotal", total], ["statOnline", online], ["statWarnToday", warnToday], ["statNonCompliant", `${nonCompliant}/${total}`], ["statExternal", `${external}/${total}`]];
+  values.forEach(([id, value]) => { const element = document.getElementById(id); if (element) element.textContent = value; });
 }
 
 function openTodayWarningsModal() {
@@ -475,6 +476,7 @@ function anbmIcon(ok) {
 // ---------------- Render bảng ----------------
 
 function renderTable(emptyMessage) {
+  if (!document.getElementById("deviceTableBody")) return;
   const search = document.getElementById("searchBox").value.trim().toLowerCase();
   const region = document.getElementById("regionFilter").value;
   const status = document.getElementById("statusFilter").value;
@@ -704,6 +706,7 @@ function bindSettingsModal() {
 
 function showToast(data) {
   const container = document.getElementById("toastContainer");
+  if (!container) return;
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.innerHTML = `
@@ -739,6 +742,7 @@ function initSignalR() {
 
 function setConnStatus(connected) {
   const el = document.getElementById("connStatus");
+  if (!el) return;
   if (connected) {
     el.textContent = "● Realtime đang hoạt động";
     el.classList.remove("disconnected");
@@ -827,13 +831,13 @@ if (networkDashboard && dashboardToolbar) {
   dashboardToolbar.parentNode.insertBefore(networkDashboard, dashboardToolbar);
 }
 
-document.getElementById("searchBox").addEventListener("input", renderTable);
-document.getElementById("regionFilter").addEventListener("change", () => {
+document.getElementById("searchBox")?.addEventListener("input", renderTable);
+document.getElementById("regionFilter")?.addEventListener("change", () => {
   summaryFilter = "all";
   renderTable();
   renderNetworkDashboard();
 });
-document.getElementById("statusFilter").addEventListener("change", () => {
+document.getElementById("statusFilter")?.addEventListener("change", () => {
   summaryFilter = "all";
   renderTable();
   renderNetworkDashboard();
@@ -844,12 +848,12 @@ document.querySelectorAll("[data-summary-filter]").forEach(element => {
 document.querySelectorAll(".donut-segment").forEach(element => {
   element.addEventListener("click", () => setSummaryFilter(element.dataset.region));
 });
-document.getElementById("loadDemoBtn").addEventListener("click", loadDemoData);
-document.getElementById("exportSelectedBtn").addEventListener("click", exportSelectedDevices);
-document.getElementById("statWarnToday").addEventListener("click", openTodayWarningsModal);
-document.getElementById("closeTodayWarningsBtn").addEventListener("click", closeTodayWarningsModal);
-document.getElementById("loadWarningsBtn").addEventListener("click", loadTodayWarnings);
-document.getElementById("warningsThisMonthBtn").addEventListener("click", () => {
+document.getElementById("loadDemoBtn")?.addEventListener("click", loadDemoData);
+document.getElementById("exportSelectedBtn")?.addEventListener("click", exportSelectedDevices);
+document.getElementById("statWarnToday")?.addEventListener("click", openTodayWarningsModal);
+document.getElementById("closeTodayWarningsBtn")?.addEventListener("click", closeTodayWarningsModal);
+document.getElementById("loadWarningsBtn")?.addEventListener("click", loadTodayWarnings);
+document.getElementById("warningsThisMonthBtn")?.addEventListener("click", () => {
   const selected = document.getElementById("warningsFromDate")?.value;
   const [year, month] = (selected || toLocalDateInputValue(new Date())).split("-").map(Number);
   setWarningsDateRange(new Date(year, month - 1, 1));
@@ -860,14 +864,14 @@ document.getElementById("warningsThisMonthBtn").addEventListener("click", () => 
   if (to) to.value = toLocalDateInputValue(monthEnd);
   loadTodayWarnings();
 });
-document.getElementById("warningsFromDate").addEventListener("change", event => setWarningsMonthBounds(event.target));
-document.getElementById("warningsToDate").addEventListener("change", event => setWarningsMonthBounds(event.target));
-document.getElementById("todayWarningsModal").addEventListener("click", (event) => {
+document.getElementById("warningsFromDate")?.addEventListener("change", event => setWarningsMonthBounds(event.target));
+document.getElementById("warningsToDate")?.addEventListener("change", event => setWarningsMonthBounds(event.target));
+document.getElementById("todayWarningsModal")?.addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.dataset.close === "today-warnings") {
     closeTodayWarningsModal();
   }
 });
-document.getElementById("selectAllRows").addEventListener("change", (event) => {
+document.getElementById("selectAllRows")?.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
   for (const deviceName of lastFilteredDeviceNames) {
@@ -879,7 +883,7 @@ document.getElementById("selectAllRows").addEventListener("change", (event) => {
   }
   renderTable();
 });
-document.getElementById("deviceTableBody").addEventListener("change", (event) => {
+document.getElementById("deviceTableBody")?.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
   if (!target.classList.contains("row-checkbox")) return;
@@ -895,13 +899,13 @@ document.getElementById("deviceTableBody").addEventListener("change", (event) =>
   updateSelectAllCheckbox();
   updateSelectedExportButton();
 });
-updateSelectedExportButton();
+if (document.getElementById("deviceTableBody")) updateSelectedExportButton();
 bindSettingsModal();
-loadSettings();
+if (document.getElementById("settingsForm")) loadSettings();
 loadDatabaseHealth();
 loadDevices();
 loadDashboardSummary();
-initSignalR();
+if (document.getElementById("connStatus") && typeof signalR !== "undefined") initSignalR();
 setInterval(loadDevices, 30000); // vẫn poll định kỳ làm nền, phòng khi SignalR bị rớt kết nối tạm thời
 setInterval(loadDashboardSummary, 30000);
 setInterval(loadDatabaseHealth, 30000);
