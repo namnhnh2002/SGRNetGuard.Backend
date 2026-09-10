@@ -598,28 +598,20 @@ public class SqlDataAccess
         }
     }
 
-    public async Task UpdateDevicePreferenceAsync(DevicePreferenceRequestDto dto)
+    public Task UpdateDevicePreferenceAsync(DevicePreferenceRequestDto dto)
     {
-        using var conn = CreateConnection();
-        var deviceId = ResolveDeviceId(dto.DeviceId, dto.DeviceName, null);
         var action = dto.Action ?? "dismiss";
 
-        // Quy tắc mong muốn:
-        // - "dismiss" hoặc "hide" => tắt cảnh báo sau này trên máy user
-        // - "close" => chỉ đóng popup hiện tại, không lưu trạng thái tắt vĩnh viễn
-        // - Dashboard vẫn giữ nguyên nhận cảnh báo bình thường
-        if (string.Equals(action, "close", StringComparison.OrdinalIgnoreCase))
-            return;
+        // Dismissal is process-local in SGRNetworkAgent. Keep this endpoint for
+        // API compatibility, but never persist a warning dismissal in Devices.
+        if (string.Equals(action, "close", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(action, "dismiss", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(action, "hide", StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.CompletedTask;
+        }
 
-        var disableWarning = string.Equals(action, "dismiss", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(action, "hide", StringComparison.OrdinalIgnoreCase);
-
-        await conn.ExecuteAsync(
-            @"UPDATE public.Devices
-              SET NetworkWarningDisabled = @DisableWarning,
-                  NetworkWarningDisabledAt = CASE WHEN @DisableWarning THEN CURRENT_TIMESTAMP ELSE NULL END
-              WHERE DeviceId = @DeviceId",
-            new { DeviceId = deviceId, DisableWarning = disableWarning });
+        return Task.CompletedTask;
     }
 
     public async Task<AgentStatusDto?> GetAgentStatusAsync(string? deviceNameOrId, decimal cpuWarningPercent, decimal ramWarningPercent, decimal diskWarningPercent, decimal diskCriticalPercent, int diskIoWarning)
@@ -661,7 +653,7 @@ public class SqlDataAccess
               ORDER BY Timestamp DESC",
             new { DeviceId = device.DeviceId });
 
-        bool hasExternalNetworkWarning = !string.Equals(device.Status, "Active", StringComparison.OrdinalIgnoreCase) && !(device.NetworkWarningDisabled ?? false);
+        bool hasExternalNetworkWarning = !string.Equals(device.Status, "Active", StringComparison.OrdinalIgnoreCase);
         bool hasSecurityWarning = !string.Equals(complianceStatus, "Compliant", StringComparison.OrdinalIgnoreCase);
         var cpuUsage = (decimal?)(performance?.CpuUsage ?? 0m);
         var ramUsage = (decimal?)(performance?.RamUsage ?? 0m);
