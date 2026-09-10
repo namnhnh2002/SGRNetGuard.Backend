@@ -831,7 +831,26 @@ async function exportDashboardReport() {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/api/reports/dashboard/excel`);
+    const total = Number(dashboardSummary?.totalComputers ?? allDevices.length);
+    const regions = ["VMB", "VMT", "VMN"].reduce((result, region) => {
+      result[region] = allDevices.filter(device => displayRegion(device).toUpperCase() === region).length;
+      return result;
+    }, {});
+    const knownRegionTotal = Object.values(regions).reduce((sum, value) => sum + value, 0);
+    regions.unknown = Math.max(0, total - knownRegionTotal);
+    const reportSummary = {
+      totalComputers: total,
+      regions,
+      compliant: Number(dashboardSummary?.compliant ?? allDevices.filter(isCompliant).length),
+      nonCompliant: Number(dashboardSummary?.nonCompliant ?? allDevices.filter(isNonCompliant).length),
+      internalNetwork: Number(dashboardSummary?.internalNetwork ?? allDevices.filter(device => device.isInternal).length),
+      externalNetwork: Number(dashboardSummary?.externalNetwork ?? allDevices.filter(device => !device.isInternal).length)
+    };
+    const response = await fetch(`${API_BASE}/api/reports/dashboard/excel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reportSummary)
+    });
     if (!response.ok) throw new Error("Không xuất được báo cáo Dashboard");
     const blob = await response.blob();
     const fileName = parseFileNameFromHeader(

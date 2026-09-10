@@ -569,6 +569,20 @@ app.MapGet("/api/reports/dashboard/excel", async (SqlDataAccess db, ExcelReportB
     }
 });
 
+app.MapPost("/api/reports/dashboard/excel", (DashboardSummaryDto summary, ExcelReportBuilder excelBuilder) =>
+{
+    try
+    {
+        var bytes = excelBuilder.BuildDashboardReport(summary);
+        return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"dashboard-report-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không xuất được báo cáo Dashboard: {ex.Message}");
+    }
+});
+
 app.MapGet("/api/alerts/today", async (SqlDataAccess db) =>
 {
     try

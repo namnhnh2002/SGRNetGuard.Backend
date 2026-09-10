@@ -14,18 +14,20 @@ public class ExcelReportBuilder
         worksheet.Range(1, 1, 1, 3).Merge();
         worksheet.Cell(2, 1).Value = "Xuất lúc (UTC)";
         worksheet.Cell(2, 2).Value = DateTime.UtcNow;
+        worksheet.Cell(2, 2).Style.DateFormat.Format = "dd/MM/yyyy HH:mm:ss";
         worksheet.Cell(4, 1).Value = "Chỉ số";
         worksheet.Cell(4, 2).Value = "Số lượng";
         worksheet.Cell(4, 3).Value = "Tỷ lệ / ghi chú";
 
         var total = summary.TotalComputers;
+        var knownRegionTotal = GetRegion(summary, "VMB") + GetRegion(summary, "VMT") + GetRegion(summary, "VMN");
         var rows = new[]
         {
             ("Tổng số máy", total, "100%"),
             ("VMB", GetRegion(summary, "VMB"), FormatPercent(GetRegion(summary, "VMB"), total)),
             ("VMT", GetRegion(summary, "VMT"), FormatPercent(GetRegion(summary, "VMT"), total)),
             ("VMN", GetRegion(summary, "VMN"), FormatPercent(GetRegion(summary, "VMN"), total)),
-            ("Chưa xác định vùng", Math.Max(0, total - summary.Regions.Values.Sum()), FormatPercent(Math.Max(0, total - summary.Regions.Values.Sum()), total)),
+            ("Chưa xác định vùng", Math.Max(0, total - knownRegionTotal), FormatPercent(Math.Max(0, total - knownRegionTotal), total)),
             ("Tuân thủ ANBM", summary.Compliant, FormatPercent(summary.Compliant, total)),
             ("Chưa tuân thủ ANBM", summary.NonCompliant, FormatPercent(summary.NonCompliant, total)),
             ("Mạng nội bộ", summary.InternalNetwork, FormatPercent(summary.InternalNetwork, total)),
@@ -45,6 +47,9 @@ public class ExcelReportBuilder
         worksheet.Row(4).Style.Font.Bold = true;
         worksheet.Row(4).Style.Fill.BackgroundColor = XLColor.FromHtml("#F1F5FC");
         worksheet.Columns().AdjustToContents();
+        worksheet.Column(1).Width = 28;
+        worksheet.Column(2).Width = 16;
+        worksheet.Column(3).Width = 20;
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
