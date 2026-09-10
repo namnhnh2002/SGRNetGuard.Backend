@@ -864,6 +864,17 @@ document.getElementById("warningsThisMonthBtn")?.addEventListener("click", () =>
   if (to) to.value = toLocalDateInputValue(monthEnd);
   loadTodayWarnings();
 });
+document.getElementById("warningsSevenDaysBtn")?.addEventListener("click", () => {
+  const today = new Date();
+  const fromDate = new Date(today);
+  fromDate.setDate(today.getDate() - 6);
+  setWarningsDateRange(today);
+  const from = document.getElementById("warningsFromDate");
+  const to = document.getElementById("warningsToDate");
+  if (from) from.value = toLocalDateInputValue(fromDate);
+  if (to) to.value = toLocalDateInputValue(today);
+  loadTodayWarnings();
+});
 document.getElementById("warningsFromDate")?.addEventListener("change", event => setWarningsMonthBounds(event.target));
 document.getElementById("warningsToDate")?.addEventListener("change", event => setWarningsMonthBounds(event.target));
 document.getElementById("todayWarningsModal")?.addEventListener("click", (event) => {
