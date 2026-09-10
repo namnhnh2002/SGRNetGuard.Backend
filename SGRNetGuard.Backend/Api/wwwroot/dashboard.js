@@ -343,6 +343,7 @@ function openTodayWarningsModal() {
   if (!modal) return;
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
+  setWarningTab("details");
   setWarningsDateRange(new Date());
   loadTodayWarnings();
 }
@@ -409,29 +410,71 @@ async function loadTodayWarnings() {
     const warnings = await response.json();
     if (!Array.isArray(warnings) || warnings.length === 0) {
       content.innerHTML = '<div class="today-warnings-empty">Không có cảnh báo trong khoảng thời gian này.</div>';
+        if (!document.getElementById("warningSummaryContent")?.classList.contains("hidden")) loadWarningSummary();
       return;
     }
 
-    content.innerHTML = `
-      <div class="today-warnings-count">${warnings.length} cảnh báo</div>
-      <div class="today-warnings-table-wrap">
-        <table class="today-warnings-table">
-          <thead><tr><th>Thiết bị</th><th>Loại</th><th>Giá trị</th><th>Site / vùng</th><th>Thời gian</th></tr></thead>
-          <tbody>${warnings.map(warning => `
-            <tr>
-              <td>${escapeHtml(warning.deviceName)}</td>
-              <td>${escapeHtml(warning.metricType)}</td>
-              <td>${Number(warning.metricValue).toFixed(0)}%</td>
-              <td>${escapeHtml(warning.siteName || "Mạng ngoài")} / ${escapeHtml(warning.region || "-")}</td>
-              <td>${fmtTime(warning.warnedAtUtc)}</td>
-            </tr>
-          `).join("")}</tbody>
-        </table>
-      </div>`;
+    renderWarningDetails(warnings, content);
+      if (!document.getElementById("warningSummaryContent")?.classList.contains("hidden")) loadWarningSummary();
   } catch (error) {
     console.error("Không tải được cảnh báo hôm nay:", error);
     content.innerHTML = '<div class="today-warnings-empty">Không tải được cảnh báo hôm nay.</div>';
+      if (!document.getElementById("warningSummaryContent")?.classList.contains("hidden")) loadWarningSummary();
   }
+}
+
+function renderWarningDetails(warnings, content) {
+  if (!Array.isArray(warnings) || warnings.length === 0) {
+    content.innerHTML = '<div class="today-warnings-empty">Không có cảnh báo trong khoảng thời gian này.</div>';
+    return;
+  }
+  content.innerHTML = `<div class="today-warnings-count">${warnings.length} cảnh báo</div><div class="today-warnings-table-wrap"><table class="today-warnings-table"><thead><tr><th>Thiết bị</th><th>Loại</th><th>Giá trị</th><th>Site / vùng</th><th>Thời gian</th></tr></thead><tbody>${warnings.map(warning => `<tr><td>${escapeHtml(warning.deviceName)}</td><td>${escapeHtml(warning.metricType)}</td><td>${Number(warning.metricValue).toFixed(0)}%</td><td>${escapeHtml(warning.siteName || "Mạng ngoài")} / ${escapeHtml(warning.region || "-")}</td><td>${fmtTime(warning.warnedAtUtc)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function warningQuery() {
+  const from = document.getElementById("warningsFromDate")?.value;
+  const to = document.getElementById("warningsToDate")?.value;
+  return from && to ? `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : "";
+}
+
+function severityLabel(severity) {
+  if (severity === "high") return ["🔴", "Cảnh báo nhiều", "warning-severity-high"];
+  if (severity === "watch") return ["🟡", "Cần theo dõi", "warning-severity-watch"];
+  return ["🟢", "Bình thường", "warning-severity-normal"];
+}
+
+async function loadWarningSummary() {
+  const content = document.getElementById("warningSummaryContent");
+  if (!content) return;
+  content.textContent = "Đang tổng hợp cảnh báo...";
+  try {
+    const response = await fetch(`${API_BASE}/api/alerts/summary${warningQuery()}`);
+    if (!response.ok) throw new Error("Không tải được tổng hợp cảnh báo");
+    const summary = await response.json();
+    content.innerHTML = `<div class="warning-summary-stats"><span class="warning-summary-high">🔴 Máy cảnh báo nhiều: <b>${summary.highDeviceCount}</b></span><span class="warning-summary-watch">🟡 Máy cần theo dõi: <b>${summary.watchDeviceCount}</b></span><span class="warning-summary-normal">🟢 Máy bình thường: <b>${summary.normalDeviceCount}</b></span><span>Tổng cảnh báo 7 ngày: <b>${summary.sevenDayTotal}</b></span><span>Tổng cảnh báo 30 ngày: <b>${summary.thirtyDayTotal}</b></span><span>Khoảng đã chọn: <b>${summary.selectedPeriodTotal}</b></span></div><div class="warning-summary-table-wrap"><table class="warning-summary-table"><thead><tr><th>MÁY</th><th>7 NGÀY</th><th>30 NGÀY</th><th>LOẠI NHIỀU NHẤT</th><th>CẢNH BÁO GẦN NHẤT</th><th>MỨC ĐỘ</th></tr></thead><tbody>${summary.devices.map(device => { const level = severityLabel(device.severity); return `<tr class="warning-summary-row" data-warning-device="${encodeURIComponent(device.deviceName)}"><td><button type="button" class="warning-device-link">${escapeHtml(device.deviceName)}</button></td><td>${device.sevenDayCount}</td><td>${device.thirtyDayCount}</td><td>${escapeHtml(device.mostFrequentType || "-")}</td><td>${device.lastWarningUtc ? fmtTime(device.lastWarningUtc) : "-"}</td><td class="${level[2]}">${level[0]} ${level[1]}</td></tr>`; }).join("")}</tbody></table></div>`;
+    content.querySelectorAll("[data-warning-device]").forEach(row => row.addEventListener("click", () => loadWarningDetailsForDevice(decodeURIComponent(row.dataset.warningDevice))));
+  } catch (error) {
+    console.error("Không tải được tổng hợp cảnh báo:", error);
+    content.innerHTML = '<div class="today-warnings-empty">Không tải được tổng hợp cảnh báo.</div>';
+  }
+}
+
+async function loadWarningDetailsForDevice(deviceName) {
+  const response = await fetch(`${API_BASE}/api/alerts${warningQuery()}`);
+  if (!response.ok) return;
+  const warnings = (await response.json()).filter(warning => warning.deviceName?.toLowerCase() === deviceName.toLowerCase());
+  const detailsTab = document.querySelector('[data-warning-tab="details"]');
+  detailsTab?.click();
+  renderWarningDetails(warnings, document.getElementById("todayWarningsContent"));
+}
+
+function setWarningTab(tab) {
+  document.querySelectorAll("[data-warning-tab]").forEach(button => button.classList.toggle("is-active", button.dataset.warningTab === tab));
+  const details = document.getElementById("todayWarningsContent");
+  const summary = document.getElementById("warningSummaryContent");
+  details?.classList.toggle("hidden", tab !== "details");
+  summary?.classList.toggle("hidden", tab !== "summary");
+  if (tab === "summary") loadWarningSummary();
 }
 
 function isNonCompliant(d) {
@@ -726,6 +769,7 @@ function initSignalR() {
   connection.on("NewWarning", (data) => {
     showToast(data);
     loadDevices(); // cập nhật lại bảng + số liệu ngay khi có cảnh báo mới
+    if (!document.getElementById("warningSummaryContent")?.classList.contains("hidden")) loadWarningSummary();
   });
 
   connection.onreconnecting(() => setConnStatus(false));
@@ -924,6 +968,9 @@ document.getElementById("warningsSevenDaysBtn")?.addEventListener("click", () =>
 });
 document.getElementById("warningsFromDate")?.addEventListener("change", event => setWarningsMonthBounds(event.target));
 document.getElementById("warningsToDate")?.addEventListener("change", event => setWarningsMonthBounds(event.target));
+document.querySelectorAll("[data-warning-tab]").forEach(button => {
+  button.addEventListener("click", () => setWarningTab(button.dataset.warningTab));
+});
 document.getElementById("todayWarningsModal")?.addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.dataset.close === "today-warnings") {
     closeTodayWarningsModal();

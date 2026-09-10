@@ -126,6 +126,38 @@ public class DeviceReportWarningDto
     public string? Region { get; set; }
 }
 
+public static class AlertSummaryThresholds
+{
+    public const int SevenDayWatch = 10;
+    public const int SevenDayHigh = 20;
+    public const int ThirtyDayWatch = 30;
+    public const int ThirtyDayHigh = 60;
+}
+
+public class AlertSummaryRowDto
+{
+    public string DeviceName { get; set; } = "";
+    public int SevenDayCount { get; set; }
+    public int ThirtyDayCount { get; set; }
+    public int SelectedPeriodCount { get; set; }
+    public string? MostFrequentType { get; set; }
+    public DateTime? LastWarningUtc { get; set; }
+    public string Severity { get; set; } = "normal";
+}
+
+public class AlertSummaryDto
+{
+    public DateOnly SelectedFrom { get; set; }
+    public DateOnly SelectedTo { get; set; }
+    public int HighDeviceCount { get; set; }
+    public int WatchDeviceCount { get; set; }
+    public int NormalDeviceCount { get; set; }
+    public int SevenDayTotal { get; set; }
+    public int ThirtyDayTotal { get; set; }
+    public int SelectedPeriodTotal { get; set; }
+    public List<AlertSummaryRowDto> Devices { get; set; } = new();
+}
+
 public class DeviceReportDataDto
 {
     public DeviceDashboardDto? Device { get; set; }

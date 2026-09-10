@@ -817,6 +817,84 @@ public class SqlDataAccess
         return await GetWarningsAsync(today, today);
     }
 
+    public async Task<AlertSummaryDto> GetAlertSummaryAsync(DateOnly selectedFrom, DateOnly selectedTo)
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh");
+        var vietnamToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone));
+        var sevenStart = vietnamToday.AddDays(-6);
+        var thirtyStart = vietnamToday.AddDays(-29);
+        var tomorrow = vietnamToday.AddDays(1);
+        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(thirtyStart.ToDateTime(TimeOnly.MinValue), timeZone);
+        var toUtc = TimeZoneInfo.ConvertTimeToUtc(tomorrow.ToDateTime(TimeOnly.MinValue), timeZone);
+        var selectedFromUtc = TimeZoneInfo.ConvertTimeToUtc(selectedFrom.ToDateTime(TimeOnly.MinValue), timeZone);
+        var selectedToUtc = TimeZoneInfo.ConvertTimeToUtc(selectedTo.AddDays(1).ToDateTime(TimeOnly.MinValue), timeZone);
+
+        using var conn = CreateConnection();
+        var rows = (await conn.QueryAsync<AlertSummaryRowDto>(
+            @"WITH bounded AS (
+                    SELECT DeviceName, MetricType, WarnedAtUtc
+                    FROM public.PerformanceWarnings
+                    WHERE WarnedAtUtc >= @FromUtc AND WarnedAtUtc < @ToUtc
+                ), counts AS (
+                    SELECT DeviceName,
+                           COUNT(*) FILTER (WHERE WarnedAtUtc >= @SevenStartUtc) AS SevenDayCount,
+                           COUNT(*) AS ThirtyDayCount,
+                           COUNT(*) FILTER (WHERE WarnedAtUtc >= @SelectedFromUtc AND WarnedAtUtc < @SelectedToUtc) AS SelectedPeriodCount
+                    FROM bounded
+                    GROUP BY DeviceName
+                ), metric_counts AS (
+                    SELECT DeviceName, MetricType,
+                           ROW_NUMBER() OVER (PARTITION BY DeviceName ORDER BY COUNT(*) DESC, MetricType) AS RowNum
+                    FROM bounded
+                    GROUP BY DeviceName, MetricType
+                ), latest AS (
+                    SELECT DISTINCT ON (DeviceName) DeviceName, WarnedAtUtc
+                    FROM bounded
+                    ORDER BY DeviceName, WarnedAtUtc DESC
+                )
+                SELECT c.DeviceName, c.SevenDayCount, c.ThirtyDayCount, c.SelectedPeriodCount,
+                       m.MetricType AS MostFrequentType, l.WarnedAtUtc AS LastWarningUtc
+                FROM counts c
+                LEFT JOIN metric_counts m ON m.DeviceName = c.DeviceName AND m.RowNum = 1
+                LEFT JOIN latest l ON l.DeviceName = c.DeviceName
+                ORDER BY c.SevenDayCount DESC, c.ThirtyDayCount DESC, c.DeviceName",
+            new
+            {
+                FromUtc = fromUtc,
+                ToUtc = toUtc,
+                SevenStartUtc = TimeZoneInfo.ConvertTimeToUtc(sevenStart.ToDateTime(TimeOnly.MinValue), timeZone),
+                SelectedFromUtc = selectedFromUtc,
+                SelectedToUtc = selectedToUtc
+            })).ToList();
+
+        foreach (var row in rows)
+        {
+            row.Severity = GetAlertSeverity(row.SevenDayCount, row.ThirtyDayCount);
+        }
+
+        var summary = new AlertSummaryDto
+        {
+            SelectedFrom = selectedFrom,
+            SelectedTo = selectedTo,
+            SevenDayTotal = rows.Sum(row => row.SevenDayCount),
+            ThirtyDayTotal = rows.Sum(row => row.ThirtyDayCount),
+            SelectedPeriodTotal = rows.Sum(row => row.SelectedPeriodCount),
+            Devices = rows
+        };
+        summary.HighDeviceCount = rows.Count(row => row.Severity == "high");
+        summary.WatchDeviceCount = rows.Count(row => row.Severity == "watch");
+        summary.NormalDeviceCount = rows.Count(row => row.Severity == "normal");
+        return summary;
+    }
+
+    private static string GetAlertSeverity(int sevenDayCount, int thirtyDayCount) =>
+        sevenDayCount >= AlertSummaryThresholds.SevenDayHigh || thirtyDayCount >= AlertSummaryThresholds.ThirtyDayHigh
+            ? "high"
+            : sevenDayCount >= AlertSummaryThresholds.SevenDayWatch || thirtyDayCount >= AlertSummaryThresholds.ThirtyDayWatch
+                ? "watch"
+                : "normal";
+
     // ---------------- Weekly report (dùng lại trong WeeklyReportJob) ----------------
 
     public async Task<IEnumerable<dynamic>> GetWeeklyReportAsync()

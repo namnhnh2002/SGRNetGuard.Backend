@@ -626,6 +626,34 @@ app.MapGet("/api/alerts", async (string? from, string? to, SqlDataAccess db) =>
     }
 });
 
+app.MapGet("/api/alerts/summary", async (string? from, string? to, SqlDataAccess db) =>
+{
+    var timeZone = TimeZoneInfo.FindSystemTimeZoneById(
+        OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh");
+    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone));
+    var fromDate = today;
+    var toDate = today;
+    if (!string.IsNullOrWhiteSpace(from) &&
+        !DateOnly.TryParseExact(from, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out fromDate))
+        return Results.BadRequest("Ngày bắt đầu không hợp lệ. Dùng định dạng yyyy-MM-dd.");
+    if (!string.IsNullOrWhiteSpace(to) &&
+        !DateOnly.TryParseExact(to, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out toDate))
+        return Results.BadRequest("Ngày kết thúc không hợp lệ. Dùng định dạng yyyy-MM-dd.");
+    if (fromDate.Year != toDate.Year || fromDate.Month != toDate.Month)
+        return Results.BadRequest("Khoảng thời gian phải nằm trong cùng một tháng.");
+    if (fromDate > toDate)
+        return Results.BadRequest("Ngày bắt đầu không được sau ngày kết thúc.");
+
+    try
+    {
+        return Results.Ok(await db.GetAlertSummaryAsync(fromDate, toDate));
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không tải được tổng hợp cảnh báo: {ex.Message}");
+    }
+});
+
 app.MapGet("/api/devices/{deviceName}", async (string deviceName, SqlDataAccess db) =>
 {
     if (string.IsNullOrWhiteSpace(deviceName))
