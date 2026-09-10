@@ -61,6 +61,7 @@ body {
 }
 .stat-action:hover { color: white; }
 .stat-label { font-size: 11px; opacity: .75; margin-top: 2px; }
+.stat-warning-action { cursor: pointer; }
 
 .toolbar {
   display: flex;

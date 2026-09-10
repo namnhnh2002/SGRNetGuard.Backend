@@ -942,6 +942,9 @@ document.getElementById("loadDemoBtn")?.addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn")?.addEventListener("click", exportSelectedDevices);
 document.getElementById("exportDashboardBtn")?.addEventListener("click", exportDashboardReport);
 document.getElementById("statWarnToday")?.addEventListener("click", openTodayWarningsModal);
+document.querySelector(".stat-warning-action")?.addEventListener("click", event => {
+  if (event.target !== document.getElementById("statWarnToday")) openTodayWarningsModal();
+});
 document.getElementById("closeTodayWarningsBtn")?.addEventListener("click", closeTodayWarningsModal);
 document.getElementById("loadWarningsBtn")?.addEventListener("click", loadTodayWarnings);
 document.getElementById("warningsThisMonthBtn")?.addEventListener("click", () => {

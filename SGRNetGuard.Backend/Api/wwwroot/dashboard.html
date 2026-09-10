@@ -4,9 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SGR NetGuard - Dashboard</title>
-<link rel="stylesheet" href="style.css?v=20260910-dashboard-export-1" />
 <link rel="stylesheet" href="style.css?v=20260910-alert-summary-1" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script><script src="dashboard.js?v=20260910-alert-summary-1"></script>
 </head>
 <body data-page="dashboard">
   <header class="topbar">
@@ -15,7 +13,7 @@
     <span class="conn-status" id="connStatus">● Đang kết nối realtime...</span><div class="stats" id="statsBar">
       <div class="stat"><span class="stat-value" id="statTotal">-</span><span class="stat-label">Tổng số máy</span></div>
       <div class="stat"><span class="stat-value" id="statOnline">-</span><span class="stat-label">Đang online</span></div>
-      <div class="stat"><button type="button" class="stat-value stat-action" id="statWarnToday" title="Xem cảnh báo hôm nay">-</button><span class="stat-label">Cảnh báo hôm nay</span></div>
+      <div class="stat stat-warning-action"><button type="button" class="stat-value stat-action" id="statWarnToday" title="Xem cảnh báo hôm nay">-</button><span class="stat-label">Cảnh báo hôm nay</span></div>
       <div class="stat"><span class="stat-value" id="statNonCompliant">-</span><span class="stat-label">Chưa tuân thủ ANBM</span></div>
       <div class="stat"><span class="stat-value" id="statExternal">-</span><span class="stat-label">Mạng ngoài</span></div>
     </div>
@@ -29,6 +27,6 @@
   </section>
   <div id="todayWarningsModal" class="today-warnings-modal hidden" aria-hidden="true"><div class="today-warnings-backdrop" data-close="today-warnings"></div><div class="today-warnings-panel" role="dialog" aria-modal="true" aria-labelledby="todayWarningsTitle"><div class="settings-modal-header"><h3 id="todayWarningsTitle">Cảnh báo hôm nay</h3><button type="button" class="settings-close" id="closeTodayWarningsBtn" aria-label="Đóng danh sách cảnh báo">✕</button></div><div class="today-warnings-filter"><strong>Xem lại cảnh báo</strong><label>Từ ngày <input type="date" id="warningsFromDate" /></label><label>Đến ngày <input type="date" id="warningsToDate" /></label><button type="button" class="secondary-button" id="warningsSevenDaysBtn">7 ngày qua</button><button type="button" class="secondary-button" id="warningsThisMonthBtn">Cả tháng</button><button type="button" class="primary-button" id="loadWarningsBtn">Xem cảnh báo</button></div><div class="warning-tabs"><button type="button" class="warning-tab is-active" data-warning-tab="details">Cảnh báo chi tiết</button><button type="button" class="warning-tab" data-warning-tab="summary">Tổng hợp theo máy</button></div><div id="todayWarningsContent" class="today-warnings-content" aria-live="polite">Đang tải cảnh báo...</div><div id="warningSummaryContent" class="today-warnings-content warning-summary-content hidden" aria-live="polite"></div></div></div>
   <div id="toastContainer"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script><script src="dashboard.js?v=20260910-dashboard-export-2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script><script src="dashboard.js?v=20260910-alert-summary-2"></script>
 </body>
 </html>
