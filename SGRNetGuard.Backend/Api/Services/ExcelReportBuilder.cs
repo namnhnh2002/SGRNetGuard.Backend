@@ -5,6 +5,58 @@ namespace SGRNetGuard.Api.Services;
 
 public class ExcelReportBuilder
 {
+    public byte[] BuildDashboardReport(DashboardSummaryDto summary)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Dashboard");
+
+        worksheet.Cell(1, 1).Value = "BÁO CÁO TỔNG QUAN DASHBOARD SGR NETGUARD";
+        worksheet.Range(1, 1, 1, 3).Merge();
+        worksheet.Cell(2, 1).Value = "Xuất lúc (UTC)";
+        worksheet.Cell(2, 2).Value = DateTime.UtcNow;
+        worksheet.Cell(4, 1).Value = "Chỉ số";
+        worksheet.Cell(4, 2).Value = "Số lượng";
+        worksheet.Cell(4, 3).Value = "Tỷ lệ / ghi chú";
+
+        var total = summary.TotalComputers;
+        var rows = new[]
+        {
+            ("Tổng số máy", total, "100%"),
+            ("VMB", GetRegion(summary, "VMB"), FormatPercent(GetRegion(summary, "VMB"), total)),
+            ("VMT", GetRegion(summary, "VMT"), FormatPercent(GetRegion(summary, "VMT"), total)),
+            ("VMN", GetRegion(summary, "VMN"), FormatPercent(GetRegion(summary, "VMN"), total)),
+            ("Chưa xác định vùng", Math.Max(0, total - summary.Regions.Values.Sum()), FormatPercent(Math.Max(0, total - summary.Regions.Values.Sum()), total)),
+            ("Tuân thủ ANBM", summary.Compliant, FormatPercent(summary.Compliant, total)),
+            ("Chưa tuân thủ ANBM", summary.NonCompliant, FormatPercent(summary.NonCompliant, total)),
+            ("Mạng nội bộ", summary.InternalNetwork, FormatPercent(summary.InternalNetwork, total)),
+            ("Mạng ngoài", summary.ExternalNetwork, FormatPercent(summary.ExternalNetwork, total))
+        };
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = index + 5;
+            worksheet.Cell(row, 1).Value = rows[index].Item1;
+            worksheet.Cell(row, 2).Value = rows[index].Item2;
+            worksheet.Cell(row, 3).Value = rows[index].Item3;
+        }
+
+        worksheet.Row(1).Style.Font.Bold = true;
+        worksheet.Row(1).Style.Font.FontSize = 14;
+        worksheet.Row(4).Style.Font.Bold = true;
+        worksheet.Row(4).Style.Fill.BackgroundColor = XLColor.FromHtml("#F1F5FC");
+        worksheet.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static int GetRegion(DashboardSummaryDto summary, string region) =>
+        summary.Regions.TryGetValue(region, out var value) ? value : 0;
+
+    private static string FormatPercent(int value, int total) =>
+        total > 0 ? $"{Math.Round(value * 100d / total):0}%" : "0%";
+
     public byte[] BuildDeviceReport(DeviceReportDataDto report, string deviceName)
     {
         using var workbook = new XLWorkbook();

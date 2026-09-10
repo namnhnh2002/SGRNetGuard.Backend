@@ -823,6 +823,33 @@ async function exportSelectedDevices() {
   }
 }
 
+async function exportDashboardReport() {
+  const button = document.getElementById("exportDashboardBtn");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Đang xuất...";
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/reports/dashboard/excel`);
+    if (!response.ok) throw new Error("Không xuất được báo cáo Dashboard");
+    const blob = await response.blob();
+    const fileName = parseFileNameFromHeader(
+      response.headers.get("content-disposition"),
+      "dashboard-report.xlsx"
+    );
+    downloadBlob(blob, fileName);
+  } catch (error) {
+    console.error("Lỗi xuất báo cáo Dashboard:", error);
+    alert("Không xuất được báo cáo Dashboard.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Xuất báo cáo Dashboard";
+    }
+  }
+}
+
 // ---------------- Init ----------------
 
 const networkDashboard = document.getElementById("networkDashboard");
@@ -850,6 +877,7 @@ document.querySelectorAll(".donut-segment").forEach(element => {
 });
 document.getElementById("loadDemoBtn")?.addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn")?.addEventListener("click", exportSelectedDevices);
+document.getElementById("exportDashboardBtn")?.addEventListener("click", exportDashboardReport);
 document.getElementById("statWarnToday")?.addEventListener("click", openTodayWarningsModal);
 document.getElementById("closeTodayWarningsBtn")?.addEventListener("click", closeTodayWarningsModal);
 document.getElementById("loadWarningsBtn")?.addEventListener("click", loadTodayWarnings);
