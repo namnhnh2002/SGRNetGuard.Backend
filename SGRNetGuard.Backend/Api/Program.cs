@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.FileProviders;
 using SGRNetGuard.Api.Data;
@@ -561,6 +562,36 @@ app.MapGet("/api/alerts/today", async (SqlDataAccess db) =>
     catch (Exception ex)
     {
         return DatabaseUnavailable($"Không tải được cảnh báo hôm nay: {ex.Message}");
+    }
+});
+
+app.MapGet("/api/alerts", async (string? from, string? to, SqlDataAccess db) =>
+{
+    var vietnamToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+        DateTime.UtcNow,
+        TimeZoneInfo.FindSystemTimeZoneById(OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh")));
+
+    var fromDate = vietnamToday;
+    var toDate = vietnamToday;
+    if (!string.IsNullOrWhiteSpace(from) &&
+        !DateOnly.TryParseExact(from, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out fromDate))
+        return Results.BadRequest("Ngày bắt đầu không hợp lệ. Dùng định dạng yyyy-MM-dd.");
+    if (!string.IsNullOrWhiteSpace(to) &&
+        !DateOnly.TryParseExact(to, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out toDate))
+        return Results.BadRequest("Ngày kết thúc không hợp lệ. Dùng định dạng yyyy-MM-dd.");
+
+    if (fromDate.Year != toDate.Year || fromDate.Month != toDate.Month)
+        return Results.BadRequest("Khoảng thời gian phải nằm trong cùng một tháng.");
+    if (fromDate > toDate)
+        return Results.BadRequest("Ngày bắt đầu không được sau ngày kết thúc.");
+
+    try
+    {
+        return Results.Ok(await db.GetWarningsAsync(fromDate, toDate));
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không tải được lịch sử cảnh báo: {ex.Message}");
     }
 });
 

@@ -793,14 +793,28 @@ public class SqlDataAccess
         return summary;
     }
 
-    public async Task<IEnumerable<DeviceReportWarningDto>> GetTodayWarningsAsync()
+    public async Task<IEnumerable<DeviceReportWarningDto>> GetWarningsAsync(DateOnly fromDate, DateOnly toDate)
     {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh");
+        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(fromDate.ToDateTime(TimeOnly.MinValue), timeZone);
+        var toUtc = TimeZoneInfo.ConvertTimeToUtc(toDate.AddDays(1).ToDateTime(TimeOnly.MinValue), timeZone);
+
         using var conn = CreateConnection();
         return await conn.QueryAsync<DeviceReportWarningDto>(
             @"SELECT DeviceName, MetricType, MetricValue, WarnedAtUtc, SiteName, Region
               FROM public.PerformanceWarnings
-              WHERE WarnedAtUtc >= CURRENT_DATE
-              ORDER BY WarnedAtUtc DESC");
+              WHERE WarnedAtUtc >= @FromUtc AND WarnedAtUtc < @ToUtc
+              ORDER BY WarnedAtUtc DESC",
+            new { FromUtc = fromUtc, ToUtc = toUtc });
+    }
+
+    public async Task<IEnumerable<DeviceReportWarningDto>> GetTodayWarningsAsync()
+    {
+        var vietnamTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById(OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh"));
+        var today = DateOnly.FromDateTime(vietnamTime);
+        return await GetWarningsAsync(today, today);
     }
 
     // ---------------- Weekly report (dùng lại trong WeeklyReportJob) ----------------

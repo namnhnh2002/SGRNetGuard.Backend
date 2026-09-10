@@ -342,6 +342,7 @@ function openTodayWarningsModal() {
   if (!modal) return;
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
+  setWarningsDateRange(new Date());
   loadTodayWarnings();
 }
 
@@ -352,17 +353,61 @@ function closeTodayWarningsModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function toLocalDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function setWarningsDateRange(date) {
+  const from = document.getElementById("warningsFromDate");
+  const to = document.getElementById("warningsToDate");
+  if (!from || !to) return;
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  const min = toLocalDateInputValue(monthStart);
+  const max = toLocalDateInputValue(monthEnd);
+  from.min = min;
+  from.max = max;
+  to.min = min;
+  to.max = max;
+  from.value = toLocalDateInputValue(date);
+  to.value = toLocalDateInputValue(date);
+}
+
+function setWarningsMonthBounds(changedInput) {
+  const value = changedInput.value;
+  if (!value) return;
+  const [year, month] = value.split("-").map(Number);
+  setWarningsDateRange(new Date(year, month - 1, 1));
+  const from = document.getElementById("warningsFromDate");
+  const to = document.getElementById("warningsToDate");
+  if (changedInput === from) {
+    from.value = value;
+    if (!to.value || to.value < value) to.value = value;
+  } else {
+    to.value = value;
+    if (!from.value || from.value > value) from.value = value;
+  }
+}
+
 async function loadTodayWarnings() {
   const content = document.getElementById("todayWarningsContent");
   if (!content) return;
   content.textContent = "Đang tải cảnh báo...";
 
   try {
-    const response = await fetch(`${API_BASE}/api/alerts/today`);
+    const from = document.getElementById("warningsFromDate")?.value;
+    const to = document.getElementById("warningsToDate")?.value;
+    const query = from && to ? `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : "";
+    const response = await fetch(`${API_BASE}/api/alerts${query}`);
     if (!response.ok) throw new Error("Không tải được cảnh báo");
     const warnings = await response.json();
     if (!Array.isArray(warnings) || warnings.length === 0) {
-      content.innerHTML = '<div class="today-warnings-empty">Không có cảnh báo hôm nay.</div>';
+      content.innerHTML = '<div class="today-warnings-empty">Không có cảnh báo trong khoảng thời gian này.</div>';
       return;
     }
 
@@ -803,6 +848,20 @@ document.getElementById("loadDemoBtn").addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn").addEventListener("click", exportSelectedDevices);
 document.getElementById("statWarnToday").addEventListener("click", openTodayWarningsModal);
 document.getElementById("closeTodayWarningsBtn").addEventListener("click", closeTodayWarningsModal);
+document.getElementById("loadWarningsBtn").addEventListener("click", loadTodayWarnings);
+document.getElementById("warningsThisMonthBtn").addEventListener("click", () => {
+  const selected = document.getElementById("warningsFromDate")?.value;
+  const [year, month] = (selected || toLocalDateInputValue(new Date())).split("-").map(Number);
+  setWarningsDateRange(new Date(year, month - 1, 1));
+  const from = document.getElementById("warningsFromDate");
+  const to = document.getElementById("warningsToDate");
+  const monthEnd = new Date(year, month, 0);
+  if (from) from.value = toLocalDateInputValue(new Date(year, month - 1, 1));
+  if (to) to.value = toLocalDateInputValue(monthEnd);
+  loadTodayWarnings();
+});
+document.getElementById("warningsFromDate").addEventListener("change", event => setWarningsMonthBounds(event.target));
+document.getElementById("warningsToDate").addEventListener("change", event => setWarningsMonthBounds(event.target));
 document.getElementById("todayWarningsModal").addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.dataset.close === "today-warnings") {
     closeTodayWarningsModal();
