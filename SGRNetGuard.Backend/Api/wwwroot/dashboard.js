@@ -822,9 +822,9 @@ async function exportSelectedDevices() {
 // ---------------- Init ----------------
 
 const networkDashboard = document.getElementById("networkDashboard");
-const deviceMain = document.querySelector("main");
-if (networkDashboard && deviceMain) {
-  deviceMain.parentNode.insertBefore(networkDashboard, deviceMain);
+const dashboardToolbar = document.querySelector(".toolbar");
+if (networkDashboard && dashboardToolbar) {
+  dashboardToolbar.parentNode.insertBefore(networkDashboard, dashboardToolbar);
 }
 
 document.getElementById("searchBox").addEventListener("input", renderTable);
