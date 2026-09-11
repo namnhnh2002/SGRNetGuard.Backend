@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
 using SGRNetGuard.Api.Data;
 using SGRNetGuard.Api.Hubs;
@@ -549,7 +550,7 @@ app.MapGet("/api/devices", async (SqlDataAccess db) =>
     }
 });
 
-app.MapDelete("/api/devices", async (DeleteOfflineDevicesRequestDto request, SqlDataAccess db) =>
+app.MapDelete("/api/devices", async ([FromBody] DeleteOfflineDevicesRequestDto request, SqlDataAccess db) =>
 {
     if (request.DeviceIds == null || request.DeviceIds.Count == 0)
         return Results.BadRequest("Chưa chọn thiết bị.");
