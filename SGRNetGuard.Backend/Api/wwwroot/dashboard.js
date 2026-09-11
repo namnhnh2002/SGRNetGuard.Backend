@@ -951,7 +951,7 @@ async function loadDeletedDeviceHistory() {
       return;
     }
 
-    content.innerHTML = `<div class="today-warnings-table-wrap"><table class="today-warnings-table"><thead><tr><th>TÊN MÁY</th><th>DEVICE ID</th><th>SITE</th><th>VÙNG</th><th>TRẠNG THÁI</th><th>THỜI GIAN XÓA</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.deviceName)}</td><td class="deleted-device-id">${escapeHtml(row.deviceId)}</td><td>${escapeHtml(row.siteName || "-")}</td><td>${escapeHtml(row.region || "-")}</td><td><span class="badge badge-offline"><span class="badge-dot"></span>${escapeHtml(row.statusAtDeletion || "Offline")}</span></td><td>${fmtTime(row.deletedAtUtc)}</td></tr>`).join("")}</tbody></table></div>`;
+    content.innerHTML = `<div class="today-warnings-table-wrap"><table class="today-warnings-table"><thead><tr><th>TÊN MÁY</th><th>MAC</th><th>SITE</th><th>VÙNG</th><th>TRẠNG THÁI</th><th>THỜI GIAN XÓA</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.deviceName)}</td><td class="deleted-device-id">${escapeHtml(row.macAddress || "-")}</td><td>${escapeHtml(row.siteName || "-")}</td><td>${escapeHtml(row.region || "-")}</td><td><span class="badge badge-offline"><span class="badge-dot"></span>${escapeHtml(row.statusAtDeletion || "Offline")}</span></td><td>${fmtTime(row.deletedAtUtc)}</td></tr>`).join("")}</tbody></table></div>`;
   } catch (error) {
     console.error("Lỗi tải lịch sử máy đã xóa:", error);
     content.innerHTML = '<div class="today-warnings-empty">Không tải được lịch sử máy đã xóa.</div>';

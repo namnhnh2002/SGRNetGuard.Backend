@@ -784,9 +784,10 @@ public class SqlDataAccess
         if (deletableIds.Length > 0)
         {
                         await conn.ExecuteAsync(
-                                @"INSERT INTO public.DeletedDeviceHistory (DeviceId, DeviceName, SiteName, Region, StatusAtDeletion, DeletedAtUtc)
+                                @"INSERT INTO public.DeletedDeviceHistory (DeviceId, DeviceName, MacAddress, SiteName, Region, StatusAtDeletion, DeletedAtUtc)
                                     SELECT d.DeviceId,
                                                  COALESCE(d.ComputerName, h.DeviceName),
+                                                 d.MACAddress,
                                                  h.LastSiteName,
                                                  h.LastRegion,
                                                  'Offline',
@@ -809,11 +810,11 @@ public class SqlDataAccess
     {
         using var conn = CreateConnection();
         return await conn.QueryAsync<DeletedDeviceHistoryDto>(
-            @"SELECT DeviceId, DeviceName, SiteName, Region, StatusAtDeletion, DeletedAtUtc
+              @"SELECT DeviceName, MacAddress, SiteName, Region, StatusAtDeletion, DeletedAtUtc
               FROM public.DeletedDeviceHistory
               WHERE @Search IS NULL
                  OR DeviceName ILIKE '%' || @Search || '%'
-                 OR DeviceId::text ILIKE '%' || @Search || '%'
+                  OR COALESCE(MacAddress, '') ILIKE '%' || @Search || '%'
               ORDER BY DeletedAtUtc DESC",
             new { Search = string.IsNullOrWhiteSpace(search) ? null : search.Trim() });
     }

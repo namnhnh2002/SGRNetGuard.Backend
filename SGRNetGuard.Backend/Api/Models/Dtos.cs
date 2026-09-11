@@ -183,8 +183,8 @@ public class DeleteOfflineDevicesResultDto
 
 public class DeletedDeviceHistoryDto
 {
-    public Guid DeviceId { get; set; }
     public string DeviceName { get; set; } = "";
+    public string? MacAddress { get; set; }
     public string? SiteName { get; set; }
     public string? Region { get; set; }
     public string StatusAtDeletion { get; set; } = "Offline";
