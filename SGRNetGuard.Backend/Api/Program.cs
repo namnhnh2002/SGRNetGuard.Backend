@@ -84,8 +84,15 @@ app.UseCors("DefaultCors");
 
 try
 {
+    app.Logger.LogInformation("Bắt đầu kiểm tra bootstrap PostgreSQL...");
     await app.Services.GetRequiredService<SqlDataAccess>()
-        .EnsureDatabaseAndSiteCatalogAsync(AppContext.BaseDirectory);
+        .EnsureDatabaseAndSiteCatalogAsync(AppContext.BaseDirectory)
+        .WaitAsync(TimeSpan.FromSeconds(20));
+    app.Logger.LogInformation("Bootstrap PostgreSQL hoàn tất.");
+}
+catch (TimeoutException ex)
+{
+    app.Logger.LogWarning(ex, "Bootstrap PostgreSQL vượt quá 20 giây; API tiếp tục khởi động và sẽ thử lại qua các request.");
 }
 catch (Exception ex)
 {
