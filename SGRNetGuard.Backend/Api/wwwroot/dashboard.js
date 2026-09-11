@@ -540,7 +540,7 @@ function renderTable(emptyMessage) {
   });
 
   const tbody = document.getElementById("deviceTableBody");
-  lastFilteredDeviceIds = filtered.filter(d => !d.isOnline && d.deviceId).map(d => d.deviceId);
+  lastFilteredDeviceIds = filtered.map(d => d.deviceId).filter(Boolean);
 
   const demoHint = isDemoMode
     ? `<div class="demo-hint">Dữ liệu demo đang được hiển thị để IT xem trước giao diện. Khi DB có dữ liệu thật, bảng sẽ tự thay đổi.</div>`
@@ -557,7 +557,7 @@ function renderTable(emptyMessage) {
     <tr class="${isNonCompliant(d) ? "row-noncompliant" : ""}">
       <td class="row-checkbox-cell">
         <input type="checkbox" class="row-checkbox" data-device-id="${d.deviceId || ""}"
-          ${d.isOnline || !d.deviceId ? "disabled" : ""}
+          ${!d.deviceId ? "disabled" : ""}
           ${selectedDeviceIds.has(d.deviceId) ? "checked" : ""} />
       </td>
       <td>
@@ -817,10 +817,12 @@ function updateSelectedExportButton() {
   const count = selectedDeviceIds.size;
   btn.textContent = `Xuất báo cáo (${count})`;
   btn.disabled = count === 0 || isDemoMode;
+  const offlineCount = Array.from(selectedDeviceIds)
+    .filter(id => allDevices.some(device => device.deviceId === id && !device.isOnline)).length;
   const deleteButton = document.getElementById("deleteOfflineBtn");
   if (deleteButton) {
-    deleteButton.textContent = `🗑 Xóa máy Offline (${count})`;
-    deleteButton.disabled = count === 0 || isDemoMode;
+    deleteButton.textContent = `🗑 Xóa máy Offline (${offlineCount})`;
+    deleteButton.disabled = offlineCount === 0 || isDemoMode;
   }
 }
 
@@ -878,7 +880,8 @@ async function exportSelectedDevices() {
 }
 
 async function deleteSelectedOfflineDevices() {
-  const selectedIds = Array.from(selectedDeviceIds);
+  const selectedIds = Array.from(selectedDeviceIds)
+    .filter(id => allDevices.some(device => device.deviceId === id && !device.isOnline));
   if (selectedIds.length === 0 || isDemoMode) return;
 
   const confirmed = window.confirm(
