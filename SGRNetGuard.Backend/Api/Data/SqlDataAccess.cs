@@ -787,7 +787,7 @@ public class SqlDataAccess
                                 @"INSERT INTO public.DeletedDeviceHistory (DeviceId, DeviceName, MacAddress, SiteName, Region, StatusAtDeletion, DeletedAtUtc)
                                     SELECT d.DeviceId,
                                                  COALESCE(d.ComputerName, h.DeviceName),
-                                                 d.MACAddress,
+                                                 COALESCE(d.MACAddress, h.MacAddress),
                                                  h.LastSiteName,
                                                  h.LastRegion,
                                                  'Offline',
@@ -810,12 +810,19 @@ public class SqlDataAccess
     {
         using var conn = CreateConnection();
         return await conn.QueryAsync<DeletedDeviceHistoryDto>(
-              @"SELECT DeviceName, MacAddress, SiteName, Region, StatusAtDeletion, DeletedAtUtc
-              FROM public.DeletedDeviceHistory
+                        @"SELECT history.DeviceName,
+                                         COALESCE(history.MacAddress, heartbeat.MacAddress) AS MacAddress,
+                                         history.SiteName,
+                                         history.Region,
+                                         history.StatusAtDeletion,
+                                         history.DeletedAtUtc
+                            FROM public.DeletedDeviceHistory history
+                            LEFT JOIN public.DeviceHeartbeats heartbeat
+                                ON LOWER(heartbeat.DeviceName) = LOWER(history.DeviceName)
               WHERE @Search IS NULL
-                 OR DeviceName ILIKE '%' || @Search || '%'
-                  OR COALESCE(MacAddress, '') ILIKE '%' || @Search || '%'
-              ORDER BY DeletedAtUtc DESC",
+                                 OR history.DeviceName ILIKE '%' || @Search || '%'
+                                 OR COALESCE(history.MacAddress, heartbeat.MacAddress, '') ILIKE '%' || @Search || '%'
+                            ORDER BY history.DeletedAtUtc DESC",
             new { Search = string.IsNullOrWhiteSpace(search) ? null : search.Trim() });
     }
 
