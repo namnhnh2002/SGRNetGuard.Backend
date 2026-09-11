@@ -710,7 +710,8 @@ public class SqlDataAccess
                    FROM public.DeviceHeartbeats h
               ),
               LatestDevice AS (
-                    SELECT d.*
+                 SELECT d.*,
+                      ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
                    FROM public.Devices d
               )
               SELECT h.DeviceName,
@@ -740,7 +741,7 @@ public class SqlDataAccess
                      c.OverallStatus AS ComplianceStatus,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
               FROM LatestHeartbeat h
-              JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName)
+              JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
               LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
