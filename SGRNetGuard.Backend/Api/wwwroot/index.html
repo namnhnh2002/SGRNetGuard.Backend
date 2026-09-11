@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SGR NetGuard - IT Dashboard</title>
 <meta http-equiv="refresh" content="0; url=/dashboard" />
-<link rel="stylesheet" href="style.css?v=20260910-card-order-2" />
+<link rel="stylesheet" href="style.css?v=20260911-offline-delete-1" />
 </head>
 <body>
   <header class="topbar">
@@ -36,7 +36,7 @@
       <option value="offline">Offline</option>
       <option value="noncompliant">Chưa tuân thủ ANBM</option>
     </select>
-    <button type="button" class="report-action-button" id="exportSelectedBtn">Xuất báo cáo (0)</button>
+    <button type="button" class="report-action-button" id="exportSelectedBtn">Xuất báo cáo (0)</button><button type="button" class="report-action-button delete-offline-button" id="deleteOfflineBtn" disabled>🗑 Xóa máy Offline (0)</button>
     <button type="button" class="settings-button" id="settingsButton">⚙ Cài đặt</button>
     <span class="conn-status" id="connStatus">● Đang kết nối realtime...</span>
     <button type="button" class="demo-button" id="loadDemoBtn" hidden>Load demo data</button>
@@ -238,6 +238,6 @@
   <div id="toastContainer"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-  <script src="dashboard.js?v=20260910-card-order-2"></script>
+  <script src="dashboard.js?v=20260911-offline-delete-1"></script>
 </body>
 </html>

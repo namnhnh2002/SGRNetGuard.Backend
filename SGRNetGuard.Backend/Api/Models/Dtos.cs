@@ -169,6 +169,18 @@ public class DeviceBulkReportRequestDto
     public List<string> DeviceNames { get; set; } = new();
 }
 
+public class DeleteOfflineDevicesRequestDto
+{
+    public List<Guid> DeviceIds { get; set; } = new();
+}
+
+public class DeleteOfflineDevicesResultDto
+{
+    public List<Guid> DeletedDeviceIds { get; set; } = new();
+    public List<Guid> OnlineDeviceIds { get; set; } = new();
+    public List<Guid> MissingDeviceIds { get; set; } = new();
+}
+
 public class DeviceDetailDto
 {
     public string DeviceName { get; set; } = "";

@@ -542,6 +542,39 @@ app.MapGet("/api/devices", async (SqlDataAccess db) =>
     }
 });
 
+app.MapDelete("/api/devices", async (DeleteOfflineDevicesRequestDto request, SqlDataAccess db) =>
+{
+    if (request.DeviceIds == null || request.DeviceIds.Count == 0)
+        return Results.BadRequest("Chưa chọn thiết bị.");
+
+    try
+    {
+        var result = await db.DeleteOfflineDevicesAsync(request.DeviceIds);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không xóa được thiết bị: {ex.Message}");
+    }
+});
+
+app.MapDelete("/api/devices/{deviceId:guid}", async (Guid deviceId, SqlDataAccess db) =>
+{
+    try
+    {
+        var result = await db.DeleteOfflineDevicesAsync([deviceId]);
+        if (result.OnlineDeviceIds.Count > 0)
+            return Results.Conflict("Không thể xóa máy đang Online.");
+        if (result.MissingDeviceIds.Count > 0)
+            return Results.NotFound("Không tìm thấy thiết bị.");
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không xóa được thiết bị: {ex.Message}");
+    }
+});
+
 app.MapGet("/api/dashboard/summary", async (SqlDataAccess db) =>
 {
     try

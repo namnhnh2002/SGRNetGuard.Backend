@@ -354,6 +354,8 @@ main { padding: 20px 24px; }
 .network-stat-card:hover, .network-stat-card.is-selected { background: #172a40; border-color: var(--card-accent); transform: translateY(-2px); }
 .network-stat-card span { display: block; color: #f1f7fb; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 .network-stat-card b { display: block; margin-top: 17px; color: #f7fbff; font-size: 30px; line-height: 1; }
+.delete-offline-button { border-color: #d86172; color: #9e2638; }
+.delete-offline-button:not(:disabled):hover { background: #fff0f2; border-color: #b4233c; }
 .accent-cyan { --card-accent: #55d7e9; }.accent-green { --card-accent: #d7f171; }.accent-red { --card-accent: #ff6689; }.accent-blue { --card-accent: #b197fc; }.accent-orange { --card-accent: #f7c948; }.accent-vmb { --card-accent: #49d3b2; }.accent-vmt { --card-accent: #4c9dff; }.accent-vmn { --card-accent: #f2a65a; }
 
 @media (max-width: 900px) {

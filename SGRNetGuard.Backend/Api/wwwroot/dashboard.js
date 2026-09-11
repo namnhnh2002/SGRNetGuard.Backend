@@ -6,8 +6,8 @@ const API_BASE = ""; // cùng origin với trang này (API và Dashboard chung 1
 
 let allDevices = [];
 let isDemoMode = false;
-const selectedDeviceNames = new Set();
-let lastFilteredDeviceNames = [];
+const selectedDeviceIds = new Set();
+let lastFilteredDeviceIds = [];
 let dashboardSummary = null;
 let summaryFilter = "all";
 
@@ -162,10 +162,10 @@ async function loadDevices() {
     }
 
     allDevices = data;
-    const currentNames = new Set(allDevices.map(d => d.deviceName));
-    for (const selectedName of Array.from(selectedDeviceNames)) {
-      if (!currentNames.has(selectedName)) {
-        selectedDeviceNames.delete(selectedName);
+    const currentIds = new Set(allDevices.map(d => d.deviceId).filter(Boolean));
+    for (const selectedId of Array.from(selectedDeviceIds)) {
+      if (!currentIds.has(selectedId)) {
+        selectedDeviceIds.delete(selectedId);
       }
     }
     isDemoMode = false;
@@ -540,7 +540,7 @@ function renderTable(emptyMessage) {
   });
 
   const tbody = document.getElementById("deviceTableBody");
-  lastFilteredDeviceNames = filtered.map(d => d.deviceName);
+  lastFilteredDeviceIds = filtered.filter(d => !d.isOnline && d.deviceId).map(d => d.deviceId);
 
   const demoHint = isDemoMode
     ? `<div class="demo-hint">Dữ liệu demo đang được hiển thị để IT xem trước giao diện. Khi DB có dữ liệu thật, bảng sẽ tự thay đổi.</div>`
@@ -556,8 +556,9 @@ function renderTable(emptyMessage) {
   tbody.innerHTML = `${demoHint}${filtered.map(d => `
     <tr class="${isNonCompliant(d) ? "row-noncompliant" : ""}">
       <td class="row-checkbox-cell">
-        <input type="checkbox" class="row-checkbox" data-device="${encodeURIComponent(d.deviceName)}"
-          ${selectedDeviceNames.has(d.deviceName) ? "checked" : ""} />
+        <input type="checkbox" class="row-checkbox" data-device-id="${d.deviceId || ""}"
+          ${d.isOnline || !d.deviceId ? "disabled" : ""}
+          ${selectedDeviceIds.has(d.deviceId) ? "checked" : ""} />
       </td>
       <td>
         <span class="badge ${d.isOnline ? "badge-online" : "badge-offline"}">
@@ -799,23 +800,28 @@ function setConnStatus(connected) {
 function updateSelectAllCheckbox() {
   const selectAll = document.getElementById("selectAllRows");
   if (!selectAll) return;
-  if (lastFilteredDeviceNames.length === 0) {
+  if (lastFilteredDeviceIds.length === 0) {
     selectAll.checked = false;
     selectAll.indeterminate = false;
     return;
   }
 
-  const selectedInView = lastFilteredDeviceNames.filter(name => selectedDeviceNames.has(name)).length;
-  selectAll.checked = selectedInView === lastFilteredDeviceNames.length;
-  selectAll.indeterminate = selectedInView > 0 && selectedInView < lastFilteredDeviceNames.length;
+  const selectedInView = lastFilteredDeviceIds.filter(id => selectedDeviceIds.has(id)).length;
+  selectAll.checked = selectedInView === lastFilteredDeviceIds.length;
+  selectAll.indeterminate = selectedInView > 0 && selectedInView < lastFilteredDeviceIds.length;
 }
 
 function updateSelectedExportButton() {
   const btn = document.getElementById("exportSelectedBtn");
   if (!btn) return;
-  const count = selectedDeviceNames.size;
+  const count = selectedDeviceIds.size;
   btn.textContent = `Xuất báo cáo (${count})`;
   btn.disabled = count === 0 || isDemoMode;
+  const deleteButton = document.getElementById("deleteOfflineBtn");
+  if (deleteButton) {
+    deleteButton.textContent = `🗑 Xóa máy Offline (${count})`;
+    deleteButton.disabled = count === 0 || isDemoMode;
+  }
 }
 
 function downloadBlob(blob, fileName) {
@@ -837,7 +843,7 @@ function parseFileNameFromHeader(contentDisposition, fallback) {
 }
 
 async function exportSelectedDevices() {
-  if (selectedDeviceNames.size === 0 || isDemoMode) return;
+  if (selectedDeviceIds.size === 0 || isDemoMode) return;
   const btn = document.getElementById("exportSelectedBtn");
   if (btn) btn.disabled = true;
 
@@ -845,7 +851,11 @@ async function exportSelectedDevices() {
     const response = await fetch(`${API_BASE}/api/reports/devices/excel`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceNames: Array.from(selectedDeviceNames) })
+      body: JSON.stringify({
+        deviceNames: Array.from(selectedDeviceIds)
+          .map(id => allDevices.find(device => device.deviceId === id)?.deviceName)
+          .filter(Boolean)
+      })
     });
 
     if (!response.ok) {
@@ -862,6 +872,47 @@ async function exportSelectedDevices() {
   } catch (error) {
     console.error("Lỗi xuất báo cáo đã chọn:", error);
     alert("Không xuất được báo cáo máy đã chọn.");
+  } finally {
+    updateSelectedExportButton();
+  }
+}
+
+async function deleteSelectedOfflineDevices() {
+  const selectedIds = Array.from(selectedDeviceIds);
+  if (selectedIds.length === 0 || isDemoMode) return;
+
+  const confirmed = window.confirm(
+    `Bạn có chắc muốn xóa ${selectedIds.length} máy Offline khỏi danh sách quản lý?\n\n` +
+    "Máy đang Offline sẽ bị xóa khỏi danh sách hiện tại.\n" +
+    "Nếu máy đó chạy lại SGRNetworkAgent và kết nối lại hệ thống, máy sẽ tự xuất hiện lại."
+  );
+  if (!confirmed) return;
+
+  const button = document.getElementById("deleteOfflineBtn");
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/devices`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceIds: selectedIds })
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      alert(result?.message || "Không thể xóa máy Offline.");
+      return;
+    }
+
+    selectedDeviceIds.clear();
+    const deletedCount = result?.deletedDeviceIds?.length || 0;
+    const onlineCount = result?.onlineDeviceIds?.length || 0;
+    const missingCount = result?.missingDeviceIds?.length || 0;
+    alert(`Đã xóa ${deletedCount} máy Offline.`
+      + (onlineCount ? `\nKhông thể xóa ${onlineCount} máy đang Online.` : "")
+      + (missingCount ? `\n${missingCount} máy không còn tồn tại.` : ""));
+    await loadDevices();
+  } catch (error) {
+    console.error("Lỗi xóa máy Offline:", error);
+    alert("Không thể xóa máy Offline.");
   } finally {
     updateSelectedExportButton();
   }
@@ -940,6 +991,7 @@ document.querySelectorAll(".donut-segment").forEach(element => {
 });
 document.getElementById("loadDemoBtn")?.addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn")?.addEventListener("click", exportSelectedDevices);
+document.getElementById("deleteOfflineBtn")?.addEventListener("click", deleteSelectedOfflineDevices);
 document.getElementById("exportDashboardBtn")?.addEventListener("click", exportDashboardReport);
 document.getElementById("statWarnToday")?.addEventListener("click", openTodayWarningsModal);
 document.querySelector(".stat-warning-action")?.addEventListener("click", event => {
@@ -982,11 +1034,11 @@ document.getElementById("todayWarningsModal")?.addEventListener("click", (event)
 document.getElementById("selectAllRows")?.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
-  for (const deviceName of lastFilteredDeviceNames) {
+  for (const deviceId of lastFilteredDeviceIds) {
     if (target.checked) {
-      selectedDeviceNames.add(deviceName);
+      selectedDeviceIds.add(deviceId);
     } else {
-      selectedDeviceNames.delete(deviceName);
+      selectedDeviceIds.delete(deviceId);
     }
   }
   renderTable();
@@ -995,14 +1047,13 @@ document.getElementById("deviceTableBody")?.addEventListener("change", (event) =
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
   if (!target.classList.contains("row-checkbox")) return;
-  const encodedDevice = target.getAttribute("data-device");
-  if (!encodedDevice) return;
-  const deviceName = decodeURIComponent(encodedDevice);
+  const deviceId = target.getAttribute("data-device-id");
+  if (!deviceId || target.disabled) return;
 
   if (target.checked) {
-    selectedDeviceNames.add(deviceName);
+    selectedDeviceIds.add(deviceId);
   } else {
-    selectedDeviceNames.delete(deviceName);
+    selectedDeviceIds.delete(deviceId);
   }
   updateSelectAllCheckbox();
   updateSelectedExportButton();

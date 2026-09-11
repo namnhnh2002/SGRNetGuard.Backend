@@ -710,8 +710,7 @@ public class SqlDataAccess
                    FROM public.DeviceHeartbeats h
               ),
               LatestDevice AS (
-                   SELECT d.*,
-                          ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
+                    SELECT d.*
                    FROM public.Devices d
               )
               SELECT h.DeviceName,
@@ -741,7 +740,7 @@ public class SqlDataAccess
                      c.OverallStatus AS ComplianceStatus,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
               FROM LatestHeartbeat h
-              LEFT JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
+              JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName)
               LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
@@ -754,6 +753,45 @@ public class SqlDataAccess
               ORDER BY h.LastSeenUtc DESC");
     }
 
+    public async Task<DeleteOfflineDevicesResultDto> DeleteOfflineDevicesAsync(IEnumerable<Guid> deviceIds)
+    {
+        var requestedIds = deviceIds.Distinct().ToArray();
+        var result = new DeleteOfflineDevicesResultDto();
+        if (requestedIds.Length == 0) return result;
+
+        await using var conn = CreateConnection();
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+
+        var existingIds = (await conn.QueryAsync<Guid>(
+            "SELECT DeviceId FROM public.Devices WHERE DeviceId = ANY(@DeviceIds)",
+            new { DeviceIds = requestedIds }, tx)).ToHashSet();
+
+        result.MissingDeviceIds.AddRange(requestedIds.Where(id => !existingIds.Contains(id)));
+
+        var onlineIds = (await conn.QueryAsync<Guid>(
+            @"SELECT d.DeviceId
+              FROM public.Devices d
+              LEFT JOIN public.DeviceHeartbeats h ON LOWER(h.DeviceName) = LOWER(d.ComputerName)
+              WHERE d.DeviceId = ANY(@DeviceIds)
+              GROUP BY d.DeviceId
+              HAVING MAX(h.LastSeenUtc) >= CURRENT_TIMESTAMP - INTERVAL '5 minutes'",
+            new { DeviceIds = requestedIds }, tx)).ToHashSet();
+
+        result.OnlineDeviceIds.AddRange(onlineIds);
+        var deletableIds = existingIds.Except(onlineIds).ToArray();
+        if (deletableIds.Length > 0)
+        {
+            await conn.ExecuteAsync(
+                "DELETE FROM public.Devices WHERE DeviceId = ANY(@DeviceIds)",
+                new { DeviceIds = deletableIds }, tx);
+            result.DeletedDeviceIds.AddRange(deletableIds);
+        }
+
+        await tx.CommitAsync();
+        return result;
+    }
+
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync()
     {
         using var conn = CreateConnection();
@@ -763,9 +801,10 @@ public class SqlDataAccess
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC) AS RowNum
                    FROM public.DeviceHeartbeats h
               )
-              SELECT LastRegion AS Region, IsInternal, AdJoined, TrellixInstalled, DesktopCentralInstalled
-              FROM LatestHeartbeat
-              WHERE RowNum = 1");
+              SELECT h.LastRegion AS Region, h.IsInternal, h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled
+              FROM LatestHeartbeat h
+              JOIN public.Devices d ON LOWER(d.ComputerName) = LOWER(h.DeviceName)
+              WHERE h.RowNum = 1");
 
         var deviceRows = rows.ToList();
         var summary = new DashboardSummaryDto
