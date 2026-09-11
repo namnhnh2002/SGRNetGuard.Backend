@@ -804,7 +804,11 @@ public class SqlDataAccess
               )
               SELECT h.LastRegion AS Region, h.IsInternal, h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled
               FROM LatestHeartbeat h
-              JOIN public.Devices d ON LOWER(d.ComputerName) = LOWER(h.DeviceName)
+                JOIN (
+                    SELECT d.*,
+                         ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
+                    FROM public.Devices d
+                ) d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
               WHERE h.RowNum = 1");
 
         var deviceRows = rows.ToList();
