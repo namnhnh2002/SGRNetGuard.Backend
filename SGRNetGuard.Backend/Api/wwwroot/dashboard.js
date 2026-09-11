@@ -921,6 +921,43 @@ async function deleteSelectedOfflineDevices() {
   }
 }
 
+function openDeletedHistoryModal() {
+  const modal = document.getElementById("deletedHistoryModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  loadDeletedDeviceHistory();
+}
+
+function closeDeletedHistoryModal() {
+  const modal = document.getElementById("deletedHistoryModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function loadDeletedDeviceHistory() {
+  const content = document.getElementById("deletedHistoryContent");
+  if (!content) return;
+  content.textContent = "Đang tải lịch sử...";
+  const search = document.getElementById("deletedHistorySearch")?.value.trim() || "";
+  try {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const response = await fetch(`${API_BASE}/api/devices/deleted-history${query}`);
+    if (!response.ok) throw new Error("Không tải được lịch sử máy đã xóa.");
+    const rows = await response.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      content.innerHTML = '<div class="today-warnings-empty">Chưa có máy nào bị xóa.</div>';
+      return;
+    }
+
+    content.innerHTML = `<div class="today-warnings-table-wrap"><table class="today-warnings-table"><thead><tr><th>TÊN MÁY</th><th>DEVICE ID</th><th>SITE</th><th>VÙNG</th><th>TRẠNG THÁI</th><th>THỜI GIAN XÓA</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.deviceName)}</td><td class="deleted-device-id">${escapeHtml(row.deviceId)}</td><td>${escapeHtml(row.siteName || "-")}</td><td>${escapeHtml(row.region || "-")}</td><td><span class="badge badge-offline"><span class="badge-dot"></span>${escapeHtml(row.statusAtDeletion || "Offline")}</span></td><td>${fmtTime(row.deletedAtUtc)}</td></tr>`).join("")}</tbody></table></div>`;
+  } catch (error) {
+    console.error("Lỗi tải lịch sử máy đã xóa:", error);
+    content.innerHTML = '<div class="today-warnings-empty">Không tải được lịch sử máy đã xóa.</div>';
+  }
+}
+
 async function exportDashboardReport() {
   const button = document.getElementById("exportDashboardBtn");
   if (button) {
@@ -995,6 +1032,17 @@ document.querySelectorAll(".donut-segment").forEach(element => {
 document.getElementById("loadDemoBtn")?.addEventListener("click", loadDemoData);
 document.getElementById("exportSelectedBtn")?.addEventListener("click", exportSelectedDevices);
 document.getElementById("deleteOfflineBtn")?.addEventListener("click", deleteSelectedOfflineDevices);
+document.getElementById("deletedHistoryBtn")?.addEventListener("click", openDeletedHistoryModal);
+document.getElementById("closeDeletedHistoryBtn")?.addEventListener("click", closeDeletedHistoryModal);
+document.getElementById("loadDeletedHistoryBtn")?.addEventListener("click", loadDeletedDeviceHistory);
+document.getElementById("deletedHistorySearch")?.addEventListener("keydown", event => {
+  if (event.key === "Enter") loadDeletedDeviceHistory();
+});
+document.getElementById("deletedHistoryModal")?.addEventListener("click", event => {
+  if (event.target instanceof HTMLElement && event.target.dataset.close === "deleted-history") {
+    closeDeletedHistoryModal();
+  }
+});
 document.getElementById("exportDashboardBtn")?.addEventListener("click", exportDashboardReport);
 document.getElementById("statWarnToday")?.addEventListener("click", openTodayWarningsModal);
 document.querySelector(".stat-warning-action")?.addEventListener("click", event => {

@@ -6,6 +6,7 @@ BEGIN;
 
 TRUNCATE TABLE
     public.PerformanceWarnings,
+    public.DeletedDeviceHistory,
     public.DeviceHistory,
     public.NetworkStatus,
     public.PerformanceLogs,
@@ -22,6 +23,7 @@ COMMIT;
 SELECT 'DeviceHeartbeats' AS table_name, COUNT(*) AS row_count FROM public.DeviceHeartbeats
 UNION ALL SELECT 'Devices', COUNT(*) FROM public.Devices
 UNION ALL SELECT 'PerformanceWarnings', COUNT(*) FROM public.PerformanceWarnings
+UNION ALL SELECT 'DeletedDeviceHistory', COUNT(*) FROM public.DeletedDeviceHistory
 UNION ALL SELECT 'NetworkStatus', COUNT(*) FROM public.NetworkStatus
 UNION ALL SELECT 'PerformanceLogs', COUNT(*) FROM public.PerformanceLogs
 UNION ALL SELECT 'ComplianceStatus', COUNT(*) FROM public.ComplianceStatus

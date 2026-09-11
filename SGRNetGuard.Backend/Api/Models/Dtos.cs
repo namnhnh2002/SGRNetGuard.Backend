@@ -181,6 +181,16 @@ public class DeleteOfflineDevicesResultDto
     public List<Guid> MissingDeviceIds { get; set; } = new();
 }
 
+public class DeletedDeviceHistoryDto
+{
+    public Guid DeviceId { get; set; }
+    public string DeviceName { get; set; } = "";
+    public string? SiteName { get; set; }
+    public string? Region { get; set; }
+    public string StatusAtDeletion { get; set; } = "Offline";
+    public DateTime DeletedAtUtc { get; set; }
+}
+
 public class DeviceDetailDto
 {
     public string DeviceName { get; set; } = "";

@@ -783,6 +783,18 @@ public class SqlDataAccess
         var deletableIds = existingIds.Except(onlineIds).ToArray();
         if (deletableIds.Length > 0)
         {
+                        await conn.ExecuteAsync(
+                                @"INSERT INTO public.DeletedDeviceHistory (DeviceId, DeviceName, SiteName, Region, StatusAtDeletion, DeletedAtUtc)
+                                    SELECT d.DeviceId,
+                                                 COALESCE(d.ComputerName, h.DeviceName),
+                                                 h.LastSiteName,
+                                                 h.LastRegion,
+                                                 'Offline',
+                                                 CURRENT_TIMESTAMP
+                                    FROM public.Devices d
+                                    LEFT JOIN public.DeviceHeartbeats h ON LOWER(h.DeviceName) = LOWER(d.ComputerName)
+                                    WHERE d.DeviceId = ANY(@DeviceIds)",
+                                new { DeviceIds = deletableIds }, tx);
             await conn.ExecuteAsync(
                 "DELETE FROM public.Devices WHERE DeviceId = ANY(@DeviceIds)",
                 new { DeviceIds = deletableIds }, tx);
@@ -791,6 +803,19 @@ public class SqlDataAccess
 
         await tx.CommitAsync();
         return result;
+    }
+
+    public async Task<IEnumerable<DeletedDeviceHistoryDto>> GetDeletedDeviceHistoryAsync(string? search)
+    {
+        using var conn = CreateConnection();
+        return await conn.QueryAsync<DeletedDeviceHistoryDto>(
+            @"SELECT DeviceId, DeviceName, SiteName, Region, StatusAtDeletion, DeletedAtUtc
+              FROM public.DeletedDeviceHistory
+              WHERE @Search IS NULL
+                 OR DeviceName ILIKE '%' || @Search || '%'
+                 OR DeviceId::text ILIKE '%' || @Search || '%'
+              ORDER BY DeletedAtUtc DESC",
+            new { Search = string.IsNullOrWhiteSpace(search) ? null : search.Trim() });
     }
 
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync()

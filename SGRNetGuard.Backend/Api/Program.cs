@@ -583,6 +583,18 @@ app.MapDelete("/api/devices/{deviceId:guid}", async (Guid deviceId, SqlDataAcces
     }
 });
 
+app.MapGet("/api/devices/deleted-history", async (string? search, SqlDataAccess db) =>
+{
+    try
+    {
+        return Results.Ok(await db.GetDeletedDeviceHistoryAsync(search));
+    }
+    catch (Exception ex)
+    {
+        return DatabaseUnavailable($"Không tải được lịch sử máy đã xóa: {ex.Message}");
+    }
+});
+
 app.MapGet("/api/dashboard/summary", async (SqlDataAccess db) =>
 {
     try
