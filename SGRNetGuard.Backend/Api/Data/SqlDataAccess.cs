@@ -725,9 +725,11 @@ public class SqlDataAccess
                      d.CurrentDepartment,
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
-                     CASE WHEN h.IsInternal THEN h.LastSiteName ELSE NULL END AS LastSiteName,
-                     h.LastRegion,
-                     h.IsInternal,
+                     CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL
+                         THEN COALESCE(h.LastSiteName, resolved.SiteName) ELSE NULL END AS LastSiteName,
+                     CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL
+                         THEN COALESCE(h.LastRegion, resolved.Region) ELSE NULL END AS LastRegion,
+                     (COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL) AS IsInternal,
                      h.CpuPercent,
                      h.RamPercent,
                      h.DiskPercent,
@@ -742,10 +744,19 @@ public class SqlDataAccess
                      h.LastSeenUtc,
                      CASE WHEN h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '10 minutes' THEN TRUE ELSE FALSE END AS IsOnline,
                      (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
-                     c.OverallStatus AS ComplianceStatus,
-                     CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
+                    c.OverallStatus AS ComplianceStatus,
+                    CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
               FROM LatestHeartbeat h
               JOIN LatestDevice d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
+                LEFT JOIN LATERAL (
+                    SELECT s.SiteName, s.Region
+                    FROM public.Sites s
+                    WHERE h.LanIp ~ '^[0-9]+(\\.[0-9]+){3}$'
+                      AND h.LanIp::inet <<= s.Subnet::cidr
+                      AND s.IsActive = TRUE
+                    ORDER BY split_part(s.Subnet, '/', 2)::integer DESC
+                    LIMIT 1
+                ) resolved ON TRUE
               LEFT JOIN (
                   SELECT DeviceId, OverallStatus
                   FROM (
@@ -839,13 +850,25 @@ public class SqlDataAccess
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC) AS RowNum
                    FROM public.DeviceHeartbeats h
               )
-              SELECT h.LastRegion AS Region, h.IsInternal, h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled
+                SELECT CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.Region IS NOT NULL
+                         THEN COALESCE(h.LastRegion, resolved.Region) ELSE NULL END AS Region,
+                     (COALESCE(h.IsInternal, FALSE) OR resolved.Region IS NOT NULL) AS IsInternal,
+                     h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled
               FROM LatestHeartbeat h
                 JOIN (
                     SELECT d.*,
                          ROW_NUMBER() OVER (PARTITION BY LOWER(d.ComputerName) ORDER BY d.LastSeen DESC, d.DeviceId DESC) AS RowNum
                     FROM public.Devices d
-                ) d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
+                                ) d ON LOWER(d.ComputerName) = LOWER(h.DeviceName) AND d.RowNum = 1
+                                LEFT JOIN LATERAL (
+                                        SELECT s.Region
+                                        FROM public.Sites s
+                                        WHERE h.LanIp ~ '^[0-9]+(\\.[0-9]+){3}$'
+                                            AND h.LanIp::inet <<= s.Subnet::cidr
+                                            AND s.IsActive = TRUE
+                                        ORDER BY split_part(s.Subnet, '/', 2)::integer DESC
+                                        LIMIT 1
+                                ) resolved ON TRUE
               WHERE h.RowNum = 1");
 
         var deviceRows = rows.ToList();
