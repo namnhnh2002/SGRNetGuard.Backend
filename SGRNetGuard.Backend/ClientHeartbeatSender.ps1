@@ -175,6 +175,27 @@ function Get-DiskTotalText {
     }
 }
 
+function Get-WindowsDiskSpaceText {
+    try {
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+        $systemDrive = ([string]$os.SystemDrive).TrimEnd('\')
+        if ([string]::IsNullOrWhiteSpace($systemDrive)) { return @{ Free = ""; Total = "" } }
+
+        $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID = '$systemDrive'" -ErrorAction Stop
+        $totalBytes = [double]$drive.Size
+        $freeBytes = [double]$drive.FreeSpace
+        if ($totalBytes -le 0 -or $freeBytes -lt 0) { return @{ Free = ""; Total = "" } }
+
+        return @{
+            Free = "{0:0} GB" -f ($freeBytes / 1GB)
+            Total = "{0:0} GB" -f ($totalBytes / 1GB)
+        }
+    }
+    catch {
+        return @{ Free = ""; Total = "" }
+    }
+}
+
 function Get-MainboardName {
     try {
         $board = Get-CimInstance Win32_BaseBoard -ErrorAction Stop | Select-Object -First 1
@@ -269,6 +290,7 @@ function Send-Heartbeat {
     $cpuModel = Get-CpuModel
     $ramTotal = Get-RamTotalText
     $diskTotal = Get-DiskTotalText
+    $windowsDiskSpace = Get-WindowsDiskSpaceText
     $mainboard = Get-MainboardName
     $uptime = Get-UptimeText
     $windowsEdition = Get-WindowsEdition
@@ -306,6 +328,8 @@ function Send-Heartbeat {
         cpuModel = $cpuModel
         ramTotal = $ramTotal
         diskTotal = $diskTotal
+        windowsDiskFree = $windowsDiskSpace.Free
+        windowsDiskTotal = $windowsDiskSpace.Total
         mainboard = $mainboard
         uptime = $uptime
     }

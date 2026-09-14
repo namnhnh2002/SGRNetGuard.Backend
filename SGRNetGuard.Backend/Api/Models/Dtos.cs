@@ -72,6 +72,8 @@ public class HeartbeatDto
     public string? CpuModel { get; set; }
     public string? RamTotal { get; set; }
     public string? DiskTotal { get; set; }
+    public string? WindowsDiskFree { get; set; }
+    public string? WindowsDiskTotal { get; set; }
     public string? Mainboard { get; set; }
     public string? Uptime { get; set; }
 }

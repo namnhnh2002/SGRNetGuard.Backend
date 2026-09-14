@@ -24,6 +24,13 @@ function fmtTime(iso) {
   });
 }
 
+function formatDiskValue(detail) {
+  const current = (detail.diskTotal || "").trim();
+  const free = (detail.windowsDiskFree || "").trim();
+  const total = (detail.windowsDiskTotal || "").trim();
+  return current && free && total ? `${current} (${free} / ${total})` : current;
+}
+
 function renderRows(detail, softwareItems = []) {
   const windowsValue = (detail.windowsVersion || "").trim();
   const windowsParts = windowsValue.split("|").map(part => part.trim()).filter(Boolean);
@@ -40,7 +47,7 @@ function renderRows(detail, softwareItems = []) {
     ["Serial Number", detail.serialNumber],
     ["CPU", detail.cpuModel],
     ["RAM", detail.ramTotal],
-    ["Ổ cứng", detail.diskTotal],
+    ["Dung lượng ổ cứng", formatDiskValue(detail)],
     ["Mainboard", detail.mainboard],
     ["Uptime", detail.uptime],
     ["Agent Version", detail.appVersion],

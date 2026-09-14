@@ -267,7 +267,7 @@ public class SqlDataAccess
                           AdJoined, TrellixInstalled, DesktopCentralInstalled,
                           LoggedInUser, LanIp, PublicIp, MacAddress,
                           Domain, WindowsVersion, SerialNumber, CpuModel,
-                          RamTotal, DiskTotal, Mainboard, Uptime, DetailUpdatedUtc, LastSeenUtc)
+                          RamTotal, DiskTotal, WindowsDiskFree, WindowsDiskTotal, Mainboard, Uptime, DetailUpdatedUtc, LastSeenUtc)
                   VALUES (@DeviceName, @SiteName,
                       CASE WHEN @IsInternal AND NULLIF(@Region, '') IS NOT NULL THEN @Region ELSE NULL END,
                       CASE WHEN @IsInternal AND NULLIF(@Region, '') IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END,
@@ -279,7 +279,7 @@ public class SqlDataAccess
                           @AdJoined, @TrellixInstalled, @DesktopCentralInstalled,
                           NULLIF(@LoggedInUser, ''), NULLIF(@LanIp, ''), NULLIF(@PublicIp, '') , NULLIF(@MacAddress, ''),
                           NULLIF(@Domain, ''), NULLIF(@WindowsVersion, ''), NULLIF(@SerialNumber, ''), NULLIF(@CpuModel, ''),
-                          NULLIF(@RamTotal, ''), NULLIF(@DiskTotal, ''), NULLIF(@Mainboard, ''), NULLIF(@Uptime, ''),
+                          NULLIF(@RamTotal, ''), NULLIF(@DiskTotal, ''), NULLIF(@WindowsDiskFree, ''), NULLIF(@WindowsDiskTotal, ''), NULLIF(@Mainboard, ''), NULLIF(@Uptime, ''),
                           CASE
                               WHEN NULLIF(@LoggedInUser, '') IS NOT NULL
                                 OR NULLIF(@LanIp, '') IS NOT NULL
@@ -323,6 +323,8 @@ public class SqlDataAccess
                       CpuModel = COALESCE(NULLIF(EXCLUDED.CpuModel, ''), public.DeviceHeartbeats.CpuModel),
                       RamTotal = COALESCE(NULLIF(EXCLUDED.RamTotal, ''), public.DeviceHeartbeats.RamTotal),
                       DiskTotal = COALESCE(NULLIF(EXCLUDED.DiskTotal, ''), public.DeviceHeartbeats.DiskTotal),
+                      WindowsDiskFree = COALESCE(NULLIF(EXCLUDED.WindowsDiskFree, ''), public.DeviceHeartbeats.WindowsDiskFree),
+                      WindowsDiskTotal = COALESCE(NULLIF(EXCLUDED.WindowsDiskTotal, ''), public.DeviceHeartbeats.WindowsDiskTotal),
                       Mainboard = COALESCE(NULLIF(EXCLUDED.Mainboard, ''), public.DeviceHeartbeats.Mainboard),
                       Uptime = COALESCE(NULLIF(EXCLUDED.Uptime, ''), public.DeviceHeartbeats.Uptime),
                       DetailUpdatedUtc = COALESCE(EXCLUDED.DetailUpdatedUtc, public.DeviceHeartbeats.DetailUpdatedUtc),
@@ -355,6 +357,8 @@ public class SqlDataAccess
                 CpuModel = dto.CpuModel,
                 RamTotal = dto.RamTotal,
                 DiskTotal = dto.DiskTotal,
+                WindowsDiskFree = dto.WindowsDiskFree,
+                WindowsDiskTotal = dto.WindowsDiskTotal,
                 Mainboard = dto.Mainboard,
                 Uptime = dto.Uptime
             },
@@ -1197,6 +1201,8 @@ public class SqlDataAccess
                    h.CpuModel,
                    h.RamTotal,
                    h.DiskTotal,
+                   h.WindowsDiskFree,
+                   h.WindowsDiskTotal,
                    h.Mainboard,
                    h.Uptime,
                    h.AppVersion,
