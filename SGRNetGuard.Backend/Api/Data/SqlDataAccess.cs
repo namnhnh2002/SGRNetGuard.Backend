@@ -740,7 +740,7 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                    CASE WHEN h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '5 minutes' THEN TRUE ELSE FALSE END AS IsOnline,
+                     CASE WHEN h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '10 minutes' THEN TRUE ELSE FALSE END AS IsOnline,
                      (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
@@ -780,7 +780,7 @@ public class SqlDataAccess
               LEFT JOIN public.DeviceHeartbeats h ON LOWER(h.DeviceName) = LOWER(d.ComputerName)
               WHERE d.DeviceId = ANY(@DeviceIds)
               GROUP BY d.DeviceId
-              HAVING MAX(h.LastSeenUtc) >= CURRENT_TIMESTAMP - INTERVAL '5 minutes'",
+              HAVING MAX(h.LastSeenUtc) >= CURRENT_TIMESTAMP - INTERVAL '10 minutes'",
             new { DeviceIds = requestedIds }, tx)).ToHashSet();
 
         result.OnlineDeviceIds.AddRange(onlineIds);
@@ -1015,7 +1015,7 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                    h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '5 minutes' AS IsOnline,
+                    h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '10 minutes' AS IsOnline,
                      (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE LOWER(w.DeviceName) = LOWER(@DeviceName) AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
@@ -1088,7 +1088,7 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                     h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '5 minutes' AS IsOnline,
+                     h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '10 minutes' AS IsOnline,
                      (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
@@ -1136,7 +1136,7 @@ public class SqlDataAccess
                      h.DesktopCentralInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
-                     h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '5 minutes' AS IsOnline,
+                     h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '10 minutes' AS IsOnline,
                      (SELECT COUNT(*) FROM public.PerformanceWarnings w WHERE w.DeviceName = h.DeviceName AND w.WarnedAtUtc >= CURRENT_DATE) AS WarningsToday,
                      c.OverallStatus AS ComplianceStatus,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus
@@ -1214,7 +1214,7 @@ public class SqlDataAccess
                    h.WifiSignalDbm,
                    h.LanLinkSpeed,
                    CASE WHEN COALESCE(h.IsInternal, FALSE) THEN 'Internal' ELSE 'External' END AS ExternalNetworkStatus,
-                   COALESCE(h.LastSeenUtc, d.LastSeen) >= CURRENT_TIMESTAMP - INTERVAL '5 minutes' AS IsOnline
+                   COALESCE(h.LastSeenUtc, d.LastSeen) >= CURRENT_TIMESTAMP - INTERVAL '10 minutes' AS IsOnline
                FROM LatestDevice d
                LEFT JOIN LatestHeartbeat h ON LOWER(h.DeviceName) = LOWER(d.ComputerName) AND h.RowNum = 1
                WHERE LOWER(d.ComputerName) = LOWER(@DeviceName)
