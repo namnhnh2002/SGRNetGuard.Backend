@@ -230,7 +230,7 @@ public class SqlDataAccess
         // A site/region reported by the desktop app is the source of truth for the
         // dashboard. The client may legitimately have a different DNS configuration
         // at a site, so dto.IsInternal must not discard a valid app site.
-        var effectiveIsInternal = hasAppSite || resolvedSite is not null;
+        var effectiveIsInternal = dto.IsInternal || hasAppSite || resolvedSite is not null;
         var effectiveSiteName = hasAppSite ? dto.SiteName : resolvedSite?.Site;
         var effectiveRegion = hasAppSite ? dto.Region : resolvedSite?.Region;
 
