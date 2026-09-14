@@ -726,9 +726,8 @@ public class SqlDataAccess
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL
-                         THEN COALESCE(h.LastSiteName, resolved.SiteName) ELSE NULL END AS LastSiteName,
-                     CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL
-                         THEN COALESCE(h.LastRegion, resolved.Region) ELSE NULL END AS LastRegion,
+                         THEN COALESCE(h.LastSiteName, resolved.SiteName) ELSE h.LastSiteName END AS LastSiteName,
+                     COALESCE(h.LastRegion, resolved.Region) AS LastRegion,
                      (COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL) AS IsInternal,
                      h.CpuPercent,
                      h.RamPercent,
@@ -849,8 +848,7 @@ public class SqlDataAccess
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC) AS RowNum
                    FROM public.DeviceHeartbeats h
               )
-                SELECT CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.Region IS NOT NULL
-                         THEN COALESCE(h.LastRegion, resolved.Region) ELSE NULL END AS Region,
+                  SELECT COALESCE(h.LastRegion, resolved.Region) AS Region,
                      (COALESCE(h.IsInternal, FALSE) OR resolved.Region IS NOT NULL) AS IsInternal,
                      h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled
               FROM LatestHeartbeat h
