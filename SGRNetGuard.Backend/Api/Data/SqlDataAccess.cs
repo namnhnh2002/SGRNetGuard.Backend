@@ -726,7 +726,7 @@ public class SqlDataAccess
                      d.CurrentLocation,
                      d.NetworkWarningDisabled,
                      CASE WHEN COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL
-                         THEN COALESCE(h.LastSiteName, resolved.SiteName) ELSE h.LastSiteName END AS LastSiteName,
+                         THEN COALESCE(h.LastSiteName, resolved.SiteName) ELSE NULL END AS LastSiteName,
                      COALESCE(h.LastRegion, resolved.Region) AS LastRegion,
                      (COALESCE(h.IsInternal, FALSE) OR resolved.SiteName IS NOT NULL) AS IsInternal,
                      h.CpuPercent,
