@@ -751,8 +751,7 @@ public class SqlDataAccess
                 LEFT JOIN LATERAL (
                     SELECT s.SiteName, s.Region
                     FROM public.Sites s
-                    WHERE h.LanIp ~ '^[0-9]+(\.[0-9]+){3}$'
-                      AND h.LanIp::inet <<= s.Subnet::cidr
+                                        WHERE h.LanIp::inet <<= s.Subnet::cidr
                       AND s.IsActive = TRUE
                     ORDER BY split_part(s.Subnet, '/', 2)::integer DESC
                     LIMIT 1
@@ -863,8 +862,7 @@ public class SqlDataAccess
                                 LEFT JOIN LATERAL (
                                         SELECT s.Region
                                         FROM public.Sites s
-                                        WHERE h.LanIp ~ '^[0-9]+(\.[0-9]+){3}$'
-                                            AND h.LanIp::inet <<= s.Subnet::cidr
+                                        WHERE h.LanIp::inet <<= s.Subnet::cidr
                                             AND s.IsActive = TRUE
                                         ORDER BY split_part(s.Subnet, '/', 2)::integer DESC
                                         LIMIT 1
