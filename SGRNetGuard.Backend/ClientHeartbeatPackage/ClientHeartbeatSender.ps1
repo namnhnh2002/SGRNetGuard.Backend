@@ -284,7 +284,8 @@ function Send-Heartbeat {
     $disk = Get-CurrentDiskPercent
     $lanIp = Get-PrivateLanIp
     $site = if ($lanIp) { Get-SiteContext -LanIp $lanIp } else { $null }
-    $isInternal = $null -ne $site
+    # Fallback: if site resolution fails, use network profile detection as backup
+    $isInternal = ($null -ne $site) -or (Test-IsInternalNetwork)
     $network = Get-NetworkContext
     $macAddress = Get-MacAddress
     $cpuModel = Get-CpuModel
