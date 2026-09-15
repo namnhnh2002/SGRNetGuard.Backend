@@ -478,11 +478,11 @@ function setWarningTab(tab) {
 }
 
 function isNonCompliant(d) {
-  return d.adJoined === false || d.trellixInstalled === false || d.desktopCentralInstalled === false;
+  return d.adJoined === false || d.trellixInstalled === false || d.desktopCentralInstalled === false || d.wsusInstalled === false;
 }
 
 function isCompliant(d) {
-  return d.adJoined === true && d.trellixInstalled === true && d.desktopCentralInstalled === true;
+  return d.adJoined === true && d.trellixInstalled === true && d.desktopCentralInstalled === true && d.wsusInstalled === true;
 }
 
 function metricClass(value) {
@@ -575,7 +575,7 @@ function renderTable(emptyMessage) {
       <td class="metric ${metricClass(d.diskPercent)}">${fmtPercent(d.diskPercent)}</td>
       <td>
         <div class="anbm-icons">
-          ${anbmIcon(d.adJoined)}${anbmIcon(d.trellixInstalled)}${anbmIcon(d.desktopCentralInstalled)}
+          ${anbmIcon(d.adJoined)}${anbmIcon(d.trellixInstalled)}${anbmIcon(d.desktopCentralInstalled)}${anbmIcon(d.wsusInstalled)}
         </div>
       </td>
       <td>${d.warningsToday > 0 ? `<span class="metric metric-bad">${d.warningsToday}</span>` : "0"}</td>

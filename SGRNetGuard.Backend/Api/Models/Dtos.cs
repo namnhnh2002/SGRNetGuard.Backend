@@ -61,6 +61,7 @@ public class HeartbeatDto
     public bool? AdJoined { get; set; }
     public bool? TrellixInstalled { get; set; }
     public bool? DesktopCentralInstalled { get; set; }
+    public bool? WsusInstalled { get; set; }
 
     // Chi tiết máy cho trang device detail
     public string? LoggedInUser { get; set; }
@@ -97,6 +98,7 @@ public class DeviceDashboardDto
     public bool? AdJoined { get; set; }
     public bool? TrellixInstalled { get; set; }
     public bool? DesktopCentralInstalled { get; set; }
+    public bool? WsusInstalled { get; set; }
     public string? AppVersion { get; set; }
     public string? NetworkType { get; set; }
     public int? WifiSignalDbm { get; set; }

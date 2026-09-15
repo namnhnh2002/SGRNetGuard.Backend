@@ -264,7 +264,7 @@ public class SqlDataAccess
             @"INSERT INTO public.DeviceHeartbeats (DeviceName, LastSiteName, LastRegion, LastInternalSeenUtc, IsInternal, AppVersion,
                           CpuPercent, RamPercent, DiskPercent, NetworkLatencyMs,
                           NetworkType, WifiSignalDbm, LanLinkSpeed,
-                          AdJoined, TrellixInstalled, DesktopCentralInstalled,
+                          AdJoined, TrellixInstalled, DesktopCentralInstalled, WsusInstalled,
                           LoggedInUser, LanIp, PublicIp, MacAddress,
                           Domain, WindowsVersion, SerialNumber, CpuModel,
                           RamTotal, DiskTotal, WindowsDiskFree, WindowsDiskTotal, Mainboard, Uptime, DetailUpdatedUtc, LastSeenUtc)
@@ -276,7 +276,7 @@ public class SqlDataAccess
                           @NetworkType,
                           CASE WHEN @NetworkType = 'WiFi' THEN @WifiSignalDbm ELSE NULL END,
                           CASE WHEN @NetworkType = 'LAN' THEN NULLIF(@LanLinkSpeed, '') ELSE NULL END,
-                          @AdJoined, @TrellixInstalled, @DesktopCentralInstalled,
+                          @AdJoined, @TrellixInstalled, @DesktopCentralInstalled, @WsusInstalled,
                           NULLIF(@LoggedInUser, ''), NULLIF(@LanIp, ''), NULLIF(@PublicIp, '') , NULLIF(@MacAddress, ''),
                           NULLIF(@Domain, ''), NULLIF(@WindowsVersion, ''), NULLIF(@SerialNumber, ''), NULLIF(@CpuModel, ''),
                           NULLIF(@RamTotal, ''), NULLIF(@DiskTotal, ''), NULLIF(@WindowsDiskFree, ''), NULLIF(@WindowsDiskTotal, ''), NULLIF(@Mainboard, ''), NULLIF(@Uptime, ''),
@@ -313,6 +313,7 @@ public class SqlDataAccess
                       AdJoined = COALESCE(EXCLUDED.AdJoined, public.DeviceHeartbeats.AdJoined),
                       TrellixInstalled = COALESCE(EXCLUDED.TrellixInstalled, public.DeviceHeartbeats.TrellixInstalled),
                       DesktopCentralInstalled = COALESCE(EXCLUDED.DesktopCentralInstalled, public.DeviceHeartbeats.DesktopCentralInstalled),
+                      WsusInstalled = COALESCE(EXCLUDED.WsusInstalled, public.DeviceHeartbeats.WsusInstalled),
                       LoggedInUser = COALESCE(NULLIF(EXCLUDED.LoggedInUser, ''), public.DeviceHeartbeats.LoggedInUser),
                       LanIp = COALESCE(NULLIF(EXCLUDED.LanIp, ''), public.DeviceHeartbeats.LanIp),
                       PublicIp = COALESCE(NULLIF(EXCLUDED.PublicIp, ''), public.DeviceHeartbeats.PublicIp),
@@ -347,6 +348,7 @@ public class SqlDataAccess
                 AdJoined = dto.AdJoined,
                 TrellixInstalled = dto.TrellixInstalled,
                 DesktopCentralInstalled = dto.DesktopCentralInstalled,
+                WsusInstalled = dto.WsusInstalled,
                 LoggedInUser = dto.LoggedInUser,
                 LanIp = dto.LanIp,
                 PublicIp = dto.PublicIp,
@@ -739,6 +741,7 @@ public class SqlDataAccess
                      h.AdJoined,
                      h.TrellixInstalled,
                      h.DesktopCentralInstalled,
+                     h.WsusInstalled,
                      h.AppVersion,
                      h.LastSeenUtc,
                      CASE WHEN h.LastSeenUtc >= CURRENT_TIMESTAMP - INTERVAL '5 minutes' THEN TRUE ELSE FALSE END AS IsOnline,
@@ -842,7 +845,7 @@ public class SqlDataAccess
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync()
     {
         using var conn = CreateConnection();
-        var rows = await conn.QueryAsync<(string? Region, bool IsInternal, bool? AdJoined, bool? TrellixInstalled, bool? DesktopCentralInstalled)>(
+        var rows = await conn.QueryAsync<(string? Region, bool IsInternal, bool? AdJoined, bool? TrellixInstalled, bool? DesktopCentralInstalled, bool? WsusInstalled)>(
             @"WITH LatestHeartbeat AS (
                    SELECT h.*,
                           ROW_NUMBER() OVER (PARTITION BY LOWER(h.DeviceName) ORDER BY h.LastSeenUtc DESC) AS RowNum
@@ -850,7 +853,7 @@ public class SqlDataAccess
               )
                   SELECT COALESCE(h.LastRegion, resolved.Region) AS Region,
                      (COALESCE(h.IsInternal, FALSE) OR resolved.Region IS NOT NULL) AS IsInternal,
-                     h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled
+                     h.AdJoined, h.TrellixInstalled, h.DesktopCentralInstalled, h.WsusInstalled
               FROM LatestHeartbeat h
                 JOIN (
                     SELECT d.*,
@@ -871,7 +874,7 @@ public class SqlDataAccess
         var summary = new DashboardSummaryDto
         {
             TotalComputers = deviceRows.Count,
-            Compliant = deviceRows.Count(row => row.AdJoined == true && row.TrellixInstalled == true && row.DesktopCentralInstalled == true),
+            Compliant = deviceRows.Count(row => row.AdJoined == true && row.TrellixInstalled == true && row.DesktopCentralInstalled == true && row.WsusInstalled == true),
             InternalNetwork = deviceRows.Count(row => row.IsInternal),
             ExternalNetwork = deviceRows.Count(row => !row.IsInternal)
         };
