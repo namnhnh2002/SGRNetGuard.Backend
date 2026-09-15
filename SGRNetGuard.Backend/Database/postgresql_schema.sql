@@ -40,6 +40,7 @@ ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS NetworkLatencyMs in
 ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS AdJoined boolean;
 ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS TrellixInstalled boolean;
 ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS DesktopCentralInstalled boolean;
+ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS WsusInstalled boolean;
 ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS LoggedInUser text;
 ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS LanIp text;
 ALTER TABLE public.DeviceHeartbeats ADD COLUMN IF NOT EXISTS PublicIp text;
