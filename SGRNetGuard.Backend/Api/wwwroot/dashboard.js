@@ -588,11 +588,16 @@ function renderTable(emptyMessage) {
 
 function formatConnection(device) {
   if (device.networkType === "WiFi") {
-    return device.wifiSignalDbm == null ? "-" : `📶 ${escapeHtml(device.wifiSignalDbm)} dBm`;
+    if (device.wifiSignalDbm != null) return `📶 ${escapeHtml(device.wifiSignalDbm)} dBm`;
+    if (device.networkLatencyMs != null) return `📶 ${escapeHtml(device.networkLatencyMs)} ms`;
+    return '<span title="Heartbeat chưa có RSSI WiFi">📶 Chưa có dBm</span>';
   }
   if (device.networkType === "LAN") {
-    return `🔌 ${escapeHtml(device.lanLinkSpeed || "-")}`;
+    if (device.lanLinkSpeed) return `🔌 ${escapeHtml(device.lanLinkSpeed)}`;
+    if (device.networkLatencyMs != null) return `🔌 ${escapeHtml(device.networkLatencyMs)} ms`;
+    return '<span title="Heartbeat chưa có tốc độ link LAN">🔌 Chưa có tốc độ</span>';
   }
+  if (device.networkLatencyMs != null) return `📡 ${escapeHtml(device.networkLatencyMs)} ms`;
   return "-";
 }
 
