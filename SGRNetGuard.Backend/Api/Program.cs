@@ -388,6 +388,17 @@ static string? ValidateItSupportRequest(ITSupportUpsertRequest request)
     return null;
 }
 
+static object ToAgentItSupport(ITSupportDto contact) => new
+{
+    contact.Site,
+    contact.Region,
+    contact.DisplayName,
+    contact.Email,
+    contact.TeamsUrl,
+    contact.Phone,
+    contact.IsActive
+};
+
 // ============================================================
 // GET /api/config
 // Client (SGR NetGuard trên máy user) gọi endpoint này định kỳ (khi khởi động
@@ -413,10 +424,10 @@ app.MapGet("/api/it-support", async (string? site, SqlDataAccess db) =>
         if (!string.IsNullOrWhiteSpace(site))
         {
             var contact = await db.GetActiveItSupportForSiteAsync(site.Trim());
-            return contact is null ? Results.NotFound() : Results.Ok(contact);
+            return contact is null ? Results.NotFound() : Results.Ok(ToAgentItSupport(contact));
         }
 
-        return Results.Ok(await db.GetActiveItSupportAsync());
+        return Results.Ok((await db.GetActiveItSupportAsync()).Select(ToAgentItSupport));
     }
     catch (Exception ex)
     {
