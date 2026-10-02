@@ -394,20 +394,46 @@ static object ToAgentItSupport(ITSupportDto contact) => new
     contact.Region,
     contact.DisplayName,
     contact.Email,
-    TeamsUrl = GetTeamsUrl(contact),
+    TeamsUrl = GetEffectiveTeamsUrl(contact),
     contact.Phone,
     contact.IsActive
 };
 
-static string? GetTeamsUrl(ITSupportDto contact)
+static string? GetEffectiveTeamsUrl(ITSupportDto contact)
 {
-    if (!string.IsNullOrWhiteSpace(contact.TeamsUrl))
-        return contact.TeamsUrl;
-    if (string.IsNullOrWhiteSpace(contact.Email))
-        return null;
+    if (!string.IsNullOrWhiteSpace(contact.TeamsUrl) &&
+        Uri.TryCreate(contact.TeamsUrl, UriKind.Absolute, out var configuredUri) &&
+        (configuredUri.Scheme == Uri.UriSchemeHttps || configuredUri.Scheme == Uri.UriSchemeHttp))
+    {
+        var isTeamsChatUrl = configuredUri.Host.Equals("teams.microsoft.com", StringComparison.OrdinalIgnoreCase) &&
+            configuredUri.AbsolutePath.StartsWith("/l/chat/0/0", StringComparison.OrdinalIgnoreCase);
+        if (!isTeamsChatUrl || TeamsUrlTargetsEmail(configuredUri, contact.Email))
+            return configuredUri.AbsoluteUri;
+    }
 
-    return $"https://teams.microsoft.com/l/chat/0/0?users={Uri.EscapeDataString(contact.Email.Trim())}";
+    return string.IsNullOrWhiteSpace(contact.Email) ? null : BuildTeamsChatUrl(contact.Email);
 }
+
+static bool TeamsUrlTargetsEmail(Uri uri, string? email)
+{
+    if (string.IsNullOrWhiteSpace(email))
+        return false;
+
+    foreach (var item in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+    {
+        var parts = item.Split('=', 2);
+        if (parts.Length == 2 && parts[0].Equals("users", StringComparison.OrdinalIgnoreCase))
+        {
+            var target = Uri.UnescapeDataString(parts[1].Replace('+', ' '));
+            return target.Equals(email.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    return false;
+}
+
+static string BuildTeamsChatUrl(string email) =>
+    $"https://teams.microsoft.com/l/chat/0/0?users={Uri.EscapeDataString(email.Trim())}";
 
 // ============================================================
 // GET /api/config

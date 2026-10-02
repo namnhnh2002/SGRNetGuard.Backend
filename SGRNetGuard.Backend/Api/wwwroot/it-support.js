@@ -45,6 +45,19 @@
     return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email.trim())}`;
   }
 
+  function effectiveTeamsUrl(contact) {
+    const configuredUrl = safeHttpUrl(contact?.teamsUrl);
+    if (configuredUrl) {
+      const url = new URL(configuredUrl);
+      const isTeamsChat = url.hostname.toLowerCase() === "teams.microsoft.com" &&
+        url.pathname.toLowerCase().startsWith("/l/chat/0/0");
+      if (!isTeamsChat ||
+          (contact?.email && url.searchParams.get("users")?.toLowerCase() === contact.email.trim().toLowerCase()))
+        return configuredUrl;
+    }
+    return safeHttpUrl(teamsChatUrl(contact?.email));
+  }
+
   function siteKey(value) {
     return String(value ?? "").trim().toLocaleLowerCase();
   }
@@ -105,7 +118,7 @@
         ? `site:${siteKey(mapping.site)}`
         : `region:${mapping.region}`;
       const contact = contactsByKey.get(key);
-      const teamsUrl = safeHttpUrl(contact?.teamsUrl) || safeHttpUrl(teamsChatUrl(contact?.email));
+      const teamsUrl = effectiveTeamsUrl(contact);
       const teams = teamsUrl
         ? `<a class="support-link" href="${escapeHtml(teamsUrl)}" target="_blank" rel="noopener noreferrer">Mở Teams</a>`
         : '<span class="support-muted">Chưa cấu hình</span>';
