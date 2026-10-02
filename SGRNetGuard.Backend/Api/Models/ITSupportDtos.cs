@@ -18,7 +18,7 @@ public sealed class ITSupportDto
 
 public sealed class ITSupportUpsertRequest
 {
-    public string Site { get; set; } = "";
+    public string? Site { get; set; }
     public string Region { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string? Username { get; set; }

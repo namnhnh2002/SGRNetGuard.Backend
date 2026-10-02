@@ -1,16 +1,19 @@
 (() => {
   const apiPath = "/api/admin/it-support";
+  const regions = ["VMB", "VMT", "VMN"];
   const status = document.getElementById("supportStatus");
   const rows = document.getElementById("supportRows");
   const dialog = document.getElementById("supportDialog");
   const form = document.getElementById("supportForm");
   const formError = document.getElementById("formError");
-  const contactsBySite = new Map();
+  const siteField = document.getElementById("siteField");
+  const contactsByKey = new Map();
   const siteMap = new Map();
   let sites = [];
 
   const fields = {
     id: document.getElementById("supportId"),
+    type: document.getElementById("supportType"),
     site: document.getElementById("siteInput"),
     region: document.getElementById("regionInput"),
     displayName: document.getElementById("displayNameInput"),
@@ -41,6 +44,12 @@
     return String(value ?? "").trim().toLocaleLowerCase();
   }
 
+  function mappingKey(contact) {
+    return contact.site
+      ? `site:${siteKey(contact.site)}`
+      : `region:${String(contact.region || "").trim().toUpperCase()}`;
+  }
+
   async function request(url, options = {}) {
     const response = await fetch(url, {
       credentials: "same-origin",
@@ -67,37 +76,49 @@
   }
 
   function render(contacts) {
-    contactsBySite.clear();
+    contactsByKey.clear();
     for (const contact of [...contacts].sort((left, right) =>
       Number(right.isActive) - Number(left.isActive) ||
       Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || "") ||
       right.id - left.id)) {
-      const key = siteKey(contact.site);
-      if (key && !contactsBySite.has(key)) contactsBySite.set(key, contact);
+      const key = mappingKey(contact);
+      if (!contactsByKey.has(key)) contactsByKey.set(key, contact);
     }
 
-    if (sites.length === 0) {
-      rows.innerHTML = '<tr><td colspan="8" class="support-empty">Chưa có Site đang hoạt động.</td></tr>';
+    if (sites.length === 0 && regions.length === 0) {
+      rows.innerHTML = '<tr><td colspan="9" class="support-empty">Chưa có Region hoặc Site.</td></tr>';
       return;
     }
 
-    rows.innerHTML = sites.map(site => {
-      const contact = contactsBySite.get(siteKey(site.site));
+    const mappings = [
+      ...regions.map(region => ({ region, site: null, type: "Region" })),
+      ...sites.map(site => ({ region: site.region, site: site.site, type: "Site" }))
+    ];
+
+    rows.innerHTML = mappings.map(mapping => {
+      const key = mapping.site
+        ? `site:${siteKey(mapping.site)}`
+        : `region:${mapping.region}`;
+      const contact = contactsByKey.get(key);
       const teamsUrl = safeHttpUrl(contact?.teamsUrl);
       const teams = teamsUrl
         ? `<a class="support-link" href="${escapeHtml(teamsUrl)}" target="_blank" rel="noopener noreferrer">Mở Teams</a>`
         : '<span class="support-muted">Chưa cấu hình</span>';
       const stateClass = contact?.isActive ? "support-state-active" : "support-state-inactive";
       const stateText = contact?.isActive ? "Đang dùng" : contact ? "Đã ngừng" : "Chưa cấu hình";
+      const scope = mapping.site ? "site" : "region";
+      const escapedRegion = escapeHtml(mapping.region);
+      const escapedSite = escapeHtml(mapping.site || "");
       const actionButtons = contact
-        ? `<button type="button" class="secondary-button" data-action="edit" data-site="${escapeHtml(site.site)}">Sửa</button>${contact.isActive
-          ? `<button type="button" class="secondary-button" data-action="deactivate" data-site="${escapeHtml(site.site)}">Ngừng</button>`
-          : `<button type="button" class="secondary-button" data-action="activate" data-site="${escapeHtml(site.site)}">Kích hoạt</button>`}`
-        : `<button type="button" class="secondary-button" data-action="add" data-site="${escapeHtml(site.site)}">Thêm</button>`;
+        ? `<button type="button" class="secondary-button" data-action="edit" data-scope="${scope}" data-region="${escapedRegion}" data-site="${escapedSite}">Sửa</button>${contact.isActive
+          ? `<button type="button" class="secondary-button" data-action="deactivate" data-scope="${scope}" data-region="${escapedRegion}" data-site="${escapedSite}">Ngừng</button>`
+          : `<button type="button" class="secondary-button" data-action="activate" data-scope="${scope}" data-region="${escapedRegion}" data-site="${escapedSite}">Kích hoạt</button>`}`
+        : `<button type="button" class="secondary-button" data-action="add" data-scope="${scope}" data-region="${escapedRegion}" data-site="${escapedSite}">Thêm</button>`;
 
       return `<tr>
-        <td><strong>${escapeHtml(site.site)}</strong></td>
-        <td>${escapeHtml(site.region)}</td>
+        <td>${mapping.type}</td>
+        <td><strong>${escapedRegion}</strong></td>
+        <td>${mapping.site ? `<strong>${escapedSite}</strong>` : '<span class="support-muted">-</span>'}</td>
         <td>${contact ? `<span class="support-name">${escapeHtml(contact.displayName)}</span><br><span class="support-muted">${escapeHtml(contact.username || "")}</span>` : '<span class="support-muted">-</span>'}</td>
         <td>${contact?.email ? `<a class="support-link" href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a>` : '<span class="support-muted">-</span>'}</td>
         <td>${teams}</td>
@@ -121,20 +142,31 @@
       sites = [...uniqueSites.values()];
       populateSiteOptions();
       render(Array.isArray(contacts) ? contacts : []);
-      status.textContent = `${sites.length} Site`;
+      status.textContent = `${regions.length} Region defaults · ${sites.length} Site contacts`;
     } catch (error) {
-      rows.innerHTML = `<tr><td colspan="8" class="support-empty">${escapeHtml(error.message)}</td></tr>`;
+      rows.innerHTML = `<tr><td colspan="9" class="support-empty">${escapeHtml(error.message)}</td></tr>`;
       status.textContent = "Không tải được dữ liệu";
     }
   }
 
-  function openDialog(site = null, contact = null) {
+  function updateMappingFields() {
+    const isSite = fields.type.value === "site";
+    siteField.hidden = !isSite;
+    fields.site.required = isSite;
+    fields.region.disabled = isSite;
+    if (isSite)
+      fields.region.value = siteMap.get(siteKey(fields.site.value))?.region ?? "";
+  }
+
+  function openDialog(mapping = null, contact = null) {
     form.reset();
     formError.textContent = "";
     document.getElementById("dialogTitle").textContent = contact ? "Sửa IT Support" : "Thêm IT Support";
     fields.id.value = contact?.id ?? "";
-    fields.site.value = contact?.site ?? site?.site ?? "";
-    updateRegionFromSite();
+    fields.type.value = (contact?.site ?? mapping?.site) ? "site" : "region";
+    fields.site.value = contact?.site ?? mapping?.site ?? "";
+    fields.region.value = contact?.region ?? mapping?.region ?? "";
+    updateMappingFields();
     fields.displayName.value = contact?.displayName ?? "";
     fields.username.value = contact?.username ?? "";
     fields.email.value = contact?.email ?? "";
@@ -160,12 +192,9 @@
     };
   }
 
-  function updateRegionFromSite() {
-    fields.region.value = siteMap.get(siteKey(fields.site.value))?.region ?? "";
-  }
-
   document.getElementById("addSupportButton").addEventListener("click", () => openDialog());
-  fields.site.addEventListener("change", updateRegionFromSite);
+  fields.type.addEventListener("change", updateMappingFields);
+  fields.site.addEventListener("change", updateMappingFields);
   document.getElementById("closeDialogButton").addEventListener("click", () => dialog.close());
   document.getElementById("cancelDialogButton").addEventListener("click", () => dialog.close());
 
@@ -190,29 +219,35 @@
   rows.addEventListener("click", async event => {
     const button = event.target.closest("button[data-action]");
     if (!button) return;
-    const site = siteMap.get(siteKey(button.dataset.site));
-    if (!site) return;
-    const contact = contactsBySite.get(siteKey(site.site));
+    const isSite = button.dataset.scope === "site";
+    const site = isSite ? siteMap.get(siteKey(button.dataset.site)) : null;
+    const region = button.dataset.region;
+    if (isSite && !site) return;
+    const mapping = { site: site?.site ?? null, region: site?.region ?? region };
+    const contact = contactsByKey.get(isSite
+      ? `site:${siteKey(mapping.site)}`
+      : `region:${String(mapping.region).toUpperCase()}`);
 
     if (button.dataset.action === "edit") {
-      openDialog(site, contact);
+      openDialog(mapping, contact);
       return;
     }
 
     if (button.dataset.action === "add") {
-      openDialog(site);
+      openDialog(mapping);
       return;
     }
 
     try {
       if (button.dataset.action === "deactivate") {
-        if (!contact || !window.confirm(`Ngừng IT Support của ${site.site}?`)) return;
+        const label = mapping.site || mapping.region;
+        if (!contact || !window.confirm(`Ngừng IT Support của ${label}?`)) return;
         await request(`${apiPath}/${contact.id}`, { method: "DELETE" });
       } else {
         if (!contact) return;
         await request(`${apiPath}/${contact.id}`, {
           method: "PUT",
-          body: JSON.stringify({ ...contact, site: site.site, region: site.region, isActive: true })
+          body: JSON.stringify({ ...contact, ...mapping, isActive: true })
         });
       }
       await loadContacts();

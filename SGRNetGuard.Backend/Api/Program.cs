@@ -353,7 +353,7 @@ static IResult DatabaseUnavailable(string message) => Results.Json(new
 
 static string? ValidateItSupportRequest(ITSupportUpsertRequest request)
 {
-    request.Site = request.Site?.Trim() ?? "";
+    request.Site = string.IsNullOrWhiteSpace(request.Site) ? null : request.Site.Trim();
     request.Region = request.Region?.Trim().ToUpperInvariant() ?? "";
     request.DisplayName = request.DisplayName?.Trim() ?? "";
     request.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
@@ -361,10 +361,10 @@ static string? ValidateItSupportRequest(ITSupportUpsertRequest request)
     request.TeamsUrl = string.IsNullOrWhiteSpace(request.TeamsUrl) ? null : request.TeamsUrl.Trim();
     request.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
 
-    if (string.IsNullOrWhiteSpace(request.Site))
-        return "Site là bắt buộc.";
     if (request.Region is not ("VMB" or "VMT" or "VMN"))
         return "Region phải là VMB, VMT hoặc VMN.";
+    if (request.Site is not null && string.IsNullOrWhiteSpace(request.Site))
+        return "Site không hợp lệ.";
     if (string.IsNullOrWhiteSpace(request.DisplayName))
         return "DisplayName là bắt buộc.";
 
@@ -417,13 +417,19 @@ app.MapGet("/api/config", async (SqlDataAccess db) =>
     }
 });
 
-app.MapGet("/api/it-support", async (string? site, SqlDataAccess db) =>
+app.MapGet("/api/it-support", async (string? site, string? region, SqlDataAccess db) =>
 {
     try
     {
         if (!string.IsNullOrWhiteSpace(site))
         {
             var contact = await db.GetActiveItSupportForSiteAsync(site.Trim());
+            return contact is null ? Results.NotFound() : Results.Ok(ToAgentItSupport(contact));
+        }
+
+        if (!string.IsNullOrWhiteSpace(region))
+        {
+            var contact = await db.GetActiveRegionItSupportAsync(region.Trim());
             return contact is null ? Results.NotFound() : Results.Ok(ToAgentItSupport(contact));
         }
 
@@ -456,8 +462,11 @@ app.MapPost("/api/admin/it-support", async (ITSupportUpsertRequest request, SqlD
         return Results.BadRequest(new { message = validationError });
     try
     {
-        if (!await db.SiteExistsAsync(request.Site, request.Region))
-            return Results.BadRequest(new { message = "Site không tồn tại hoặc không thuộc Region đã chọn." });
+        var mappingExists = request.Site is null
+            ? await db.RegionExistsAsync(request.Region)
+            : await db.SiteExistsAsync(request.Site, request.Region);
+        if (!mappingExists)
+            return Results.BadRequest(new { message = "Region hoặc Site không tồn tại trong cấu hình hiện tại." });
 
         return Results.Created("/api/admin/it-support", await db.CreateItSupportAsync(request));
     }
@@ -478,8 +487,11 @@ app.MapPut("/api/admin/it-support/{id:int}", async (int id, ITSupportUpsertReque
         return Results.BadRequest(new { message = validationError });
     try
     {
-        if (!await db.SiteExistsAsync(request.Site, request.Region))
-            return Results.BadRequest(new { message = "Site không tồn tại hoặc không thuộc Region đã chọn." });
+        var mappingExists = request.Site is null
+            ? await db.RegionExistsAsync(request.Region)
+            : await db.SiteExistsAsync(request.Site, request.Region);
+        if (!mappingExists)
+            return Results.BadRequest(new { message = "Region hoặc Site không tồn tại trong cấu hình hiện tại." });
 
         var updated = await db.UpdateItSupportAsync(id, request);
         return updated is null ? (IResult)Results.NotFound() : Results.Ok(updated);

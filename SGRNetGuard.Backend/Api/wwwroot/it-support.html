@@ -31,8 +31,9 @@
       <table class="support-table">
         <thead>
           <tr>
-            <th>Site</th>
+            <th>Loại</th>
             <th>Region</th>
+            <th>Site</th>
             <th>Nhân viên</th>
             <th>Email</th>
             <th>Teams</th>
@@ -42,7 +43,7 @@
           </tr>
         </thead>
         <tbody id="supportRows">
-          <tr><td colspan="8" class="support-empty">Đang tải...</td></tr>
+          <tr><td colspan="9" class="support-empty">Đang tải...</td></tr>
         </tbody>
       </table>
     </div>
@@ -56,13 +57,24 @@
       </div>
       <input type="hidden" id="supportId" />
       <div class="support-form-grid">
-        <label>Site
-          <select id="siteInput" required>
+        <label>Loại hỗ trợ
+          <select id="supportType" required>
+            <option value="region">Region support</option>
+            <option value="site">Site support</option>
+          </select>
+        </label>
+        <label id="siteField">Site
+          <select id="siteInput">
             <option value="">Đang tải danh sách Site...</option>
           </select>
         </label>
         <label>Region
-          <input id="regionInput" readonly />
+          <select id="regionInput" required>
+            <option value="">Chọn Region</option>
+            <option value="VMB">VMB</option>
+            <option value="VMT">VMT</option>
+            <option value="VMN">VMN</option>
+          </select>
         </label>
         <label>Tên hiển thị
           <input id="displayNameInput" maxlength="160" required />

@@ -56,7 +56,8 @@ public class SqlDataAccess
         var seedPath = Path.Combine(baseDirectory, "Database", "postgresql_seed.sql");
         var itSupportUpgradePath = Path.Combine(baseDirectory, "Database", "09_it_support_upgrade.sql");
         var itSupportSiteUpgradePath = Path.Combine(baseDirectory, "Database", "10_it_support_site_upgrade.sql");
-        if (!File.Exists(schemaPath) || !File.Exists(seedPath) || !File.Exists(itSupportUpgradePath) || !File.Exists(itSupportSiteUpgradePath))
+        var itSupportRegionUpgradePath = Path.Combine(baseDirectory, "Database", "11_it_support_region_upgrade.sql");
+        if (!File.Exists(schemaPath) || !File.Exists(seedPath) || !File.Exists(itSupportUpgradePath) || !File.Exists(itSupportSiteUpgradePath) || !File.Exists(itSupportRegionUpgradePath))
             throw new FileNotFoundException("Không tìm thấy file bootstrap PostgreSQL trong bản publish.");
 
         await using var conn = CreateConnection();
@@ -71,6 +72,8 @@ public class SqlDataAccess
         command.CommandText = await File.ReadAllTextAsync(itSupportUpgradePath);
         await command.ExecuteNonQueryAsync();
         command.CommandText = await File.ReadAllTextAsync(itSupportSiteUpgradePath);
+        await command.ExecuteNonQueryAsync();
+        command.CommandText = await File.ReadAllTextAsync(itSupportRegionUpgradePath);
         await command.ExecuteNonQueryAsync();
     }
 
@@ -189,10 +192,22 @@ public class SqlDataAccess
         var contacts = await conn.QueryAsync<ITSupportDto>(
             @"SELECT Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
               FROM public.ITSupport
-              WHERE IsActive = TRUE AND Site IS NOT NULL
-              ORDER BY Region, Site");
+                            WHERE IsActive = TRUE
+                            ORDER BY SortOrder, Region, Site NULLS FIRST, Id");
         return contacts.AsList();
     }
+
+        public async Task<ITSupportDto?> GetActiveRegionItSupportAsync(string region)
+        {
+                using var conn = CreateConnection();
+                return await conn.QuerySingleOrDefaultAsync<ITSupportDto>(
+                        @"SELECT Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
+                            FROM public.ITSupport
+                            WHERE IsActive = TRUE AND Site IS NULL
+                                AND upper(btrim(Region)) = upper(btrim(@Region))
+                            LIMIT 1",
+                        new { Region = region });
+        }
 
     public async Task<ITSupportDto?> GetActiveItSupportForSiteAsync(string site)
     {
@@ -212,8 +227,7 @@ public class SqlDataAccess
         var contacts = await conn.QueryAsync<ITSupportDto>(
             @"SELECT Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
               FROM public.ITSupport
-              WHERE Site IS NOT NULL
-              ORDER BY Region, Site, IsActive DESC, UpdatedAt DESC, Id DESC");
+                            ORDER BY Site NULLS FIRST, Region, IsActive DESC, UpdatedAt DESC, Id DESC");
         return contacts.AsList();
     }
 
@@ -231,6 +245,16 @@ public class SqlDataAccess
         return exists;
     }
 
+    public async Task<bool> RegionExistsAsync(string region)
+    {
+        using var conn = CreateConnection();
+        return await conn.ExecuteScalarAsync<bool>(
+            @"SELECT EXISTS (
+                SELECT 1 FROM public.Sites
+                WHERE IsActive = TRUE AND upper(btrim(Region)) = upper(btrim(@Region)))",
+            new { Region = region });
+    }
+
     public async Task<ITSupportDto> CreateItSupportAsync(ITSupportUpsertRequest request)
     {
         using var conn = CreateConnection();
@@ -238,11 +262,24 @@ public class SqlDataAccess
                 await using var transaction = await conn.BeginTransactionAsync();
                 if (request.IsActive)
                 {
-                        await conn.ExecuteAsync(
-                                @"UPDATE public.ITSupport
-                                    SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
-                                    WHERE IsActive = TRUE AND lower(btrim(Site)) = lower(btrim(@Site))",
-                                new { request.Site }, transaction);
+                        if (request.Site is null)
+                        {
+                                await conn.ExecuteAsync(
+                                        @"UPDATE public.ITSupport
+                                            SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+                                            WHERE IsActive = TRUE AND Site IS NULL
+                                                AND upper(btrim(Region)) = upper(btrim(@Region))",
+                                        new { request.Region }, transaction);
+                        }
+                        else
+                        {
+                                await conn.ExecuteAsync(
+                                        @"UPDATE public.ITSupport
+                                            SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+                                            WHERE IsActive = TRUE AND Site IS NOT NULL
+                                                AND lower(btrim(Site)) = lower(btrim(@Site))",
+                                        new { request.Site }, transaction);
+                        }
                 }
 
                 var created = await conn.QuerySingleAsync<ITSupportDto>(
@@ -272,13 +309,26 @@ public class SqlDataAccess
 
         if (request.IsActive)
         {
-            await conn.ExecuteAsync(
-                @"UPDATE public.ITSupport
-                  SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
-                  WHERE IsActive = TRUE
-                    AND Id <> @Id
-                    AND lower(btrim(Site)) = lower(btrim(@Site))",
-                new { Id = id, request.Site }, transaction);
+                        if (request.Site is null)
+                        {
+                                await conn.ExecuteAsync(
+                                        @"UPDATE public.ITSupport
+                                            SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+                                            WHERE IsActive = TRUE AND Site IS NULL
+                                                AND Id <> @Id
+                                                AND upper(btrim(Region)) = upper(btrim(@Region))",
+                                        new { Id = id, request.Region }, transaction);
+                        }
+                        else
+                        {
+                                await conn.ExecuteAsync(
+                                        @"UPDATE public.ITSupport
+                                            SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+                                            WHERE IsActive = TRUE AND Site IS NOT NULL
+                                                AND Id <> @Id
+                                                AND lower(btrim(Site)) = lower(btrim(@Site))",
+                                        new { Id = id, request.Site }, transaction);
+                        }
         }
 
         var updated = await conn.QuerySingleOrDefaultAsync<ITSupportDto>(

@@ -38,7 +38,7 @@ Mã tích hợp nằm trong `SGRNetGuard.Backend/ClientIntegration/CLIENT_CODE_T
 Agent có các nhiệm vụ chính:
 
 - Lấy cấu hình site, subnet, DNS và người phụ trách từ API qua `GET /api/config`.
-- Lấy IT Support cho Site đã match từ `GET /api/it-support?site={site}`; cache JSON theo Site tại `%LocalAppData%\SGRNetworkAgent\it-support-cache.json` và refresh mỗi 10 phút.
+- Mạng nội bộ lấy IT Support chính xác theo Site qua `GET /api/it-support?site={site}`; mạng ngoài lấy Region default qua `GET /api/it-support?region={region}`. Agent cache Region và Site riêng tại `%LocalAppData%\SGRNetworkAgent\it-support-cache.json` và refresh mỗi 10 phút.
 - Cache cấu hình tại máy user để app vẫn dùng được khi API tạm thời không truy cập được.
 - Nhận diện site/vùng từ địa chỉ IP LAN và subnet.
 - Gửi heartbeat định kỳ, thường mỗi 60 giây.
@@ -99,6 +99,8 @@ Các script chính nằm trong `SGRNetGuard.Backend/Database/`:
 - `08_network_connection_details_upgrade.sql`: thông tin kết nối mạng.
 - `09_it_support_upgrade.sql`: bảng và seed IT Support, chạy idempotent khi API bootstrap.
 - `10_it_support_site_upgrade.sql`: thêm Site key, migrate contact hiện tại thành từng Site và giới hạn một contact active mỗi Site.
+- `11_it_support_region_upgrade.sql`: khôi phục Region defaults và giới hạn một contact active mỗi Region khi `Site IS NULL`.
+- `11_it_support_region_upgrade.sql`: khôi phục Region-level defaults và giới hạn một contact active mỗi Region default.
 
 API tự kiểm tra và bootstrap schema/site catalog khi khởi động thông qua `EnsureDatabaseAndSiteCatalogAsync()`.
 
@@ -179,6 +181,8 @@ SignalR chỉ đẩy sự kiện realtime. Dữ liệu chính vẫn được lư
 |---|---|
 | `GET /api/config` | Lấy site, subnet, DNS và cấu hình tập trung |
 | `GET /api/it-support?site={site}` | Contact active chính xác theo Site cho Agent; không fallback theo Region |
+| `GET /api/it-support?region={region}` | Region-level default cho giao diện Agent khi mạng ngoài |
+| `GET/POST/PUT/DELETE /api/admin/it-support` | Quản lý Region defaults (`Site IS NULL`) và Site contacts |
 | `GET/POST/PUT/DELETE /api/admin/it-support` | Quản trị liên hệ; DELETE chỉ deactivate |
 | `POST /api/heartbeat` | Ghi heartbeat và thông tin hiện tại của máy |
 | `POST /api/telemetry/warning` | Ghi cảnh báo hiệu năng và phát SignalR |
