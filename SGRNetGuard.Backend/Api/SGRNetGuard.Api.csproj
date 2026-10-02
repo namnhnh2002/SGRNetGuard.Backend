@@ -16,6 +16,7 @@
   <ItemGroup>
     <None Include="..\Database\postgresql_schema.sql" Link="Database\postgresql_schema.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <None Include="..\Database\postgresql_seed.sql" Link="Database\postgresql_seed.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <None Include="..\Database\09_it_support_upgrade.sql" Link="Database\09_it_support_upgrade.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
   </ItemGroup>
 
 </Project>

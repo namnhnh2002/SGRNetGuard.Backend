@@ -12,7 +12,7 @@ services:
       - key: DashboardAuth__Username
         value: admin
       - key: DashboardAuth__Password
-        value: Sun@2026
+        sync: false
       - key: ConnectionStrings__SGRNetGuard
         sync: false
       # Set this to Render PostgreSQL's DATABASE_URL, or use the equivalent

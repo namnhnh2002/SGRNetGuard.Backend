@@ -296,7 +296,7 @@ public class SystemSettingsDto
     public string Language { get; set; } = "vi";
     public bool RealtimeEnabled { get; set; } = true;
     public string DashboardUsername { get; set; } = "admin";
-    public string DashboardPassword { get; set; } = "Sun@2026";
+    public string DashboardPassword { get; set; } = "";
 }
 
 public class AgentStatusDto

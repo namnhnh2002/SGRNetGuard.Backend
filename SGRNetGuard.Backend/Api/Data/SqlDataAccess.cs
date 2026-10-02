@@ -54,7 +54,8 @@ public class SqlDataAccess
     {
         var schemaPath = Path.Combine(baseDirectory, "Database", "postgresql_schema.sql");
         var seedPath = Path.Combine(baseDirectory, "Database", "postgresql_seed.sql");
-        if (!File.Exists(schemaPath) || !File.Exists(seedPath))
+        var itSupportUpgradePath = Path.Combine(baseDirectory, "Database", "09_it_support_upgrade.sql");
+        if (!File.Exists(schemaPath) || !File.Exists(seedPath) || !File.Exists(itSupportUpgradePath))
             throw new FileNotFoundException("Không tìm thấy file bootstrap PostgreSQL trong bản publish.");
 
         await using var conn = CreateConnection();
@@ -65,6 +66,8 @@ public class SqlDataAccess
         command.CommandText = await File.ReadAllTextAsync(schemaPath);
         await command.ExecuteNonQueryAsync();
         command.CommandText = await File.ReadAllTextAsync(seedPath);
+        await command.ExecuteNonQueryAsync();
+        command.CommandText = await File.ReadAllTextAsync(itSupportUpgradePath);
         await command.ExecuteNonQueryAsync();
     }
 
@@ -175,6 +178,80 @@ public class SqlDataAccess
             DnsServersByRegion = dnsByRegion,
             Sites = sites
         };
+    }
+
+    public async Task<IReadOnlyList<ITSupportDto>> GetActiveItSupportAsync()
+    {
+        using var conn = CreateConnection();
+        var contacts = await conn.QueryAsync<ITSupportDto>(
+            @"SELECT Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
+              FROM public.ITSupport
+              WHERE IsActive = TRUE
+              ORDER BY SortOrder, Region, Id");
+        return contacts.AsList();
+    }
+
+    public async Task<IReadOnlyList<ITSupportDto>> GetAllItSupportAsync()
+    {
+        using var conn = CreateConnection();
+        var contacts = await conn.QueryAsync<ITSupportDto>(
+            @"SELECT Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
+              FROM public.ITSupport
+              ORDER BY SortOrder, Region, Id");
+        return contacts.AsList();
+    }
+
+    public async Task<ITSupportDto> CreateItSupportAsync(ITSupportUpsertRequest request)
+    {
+        using var conn = CreateConnection();
+        return await conn.QuerySingleAsync<ITSupportDto>(
+            @"INSERT INTO public.ITSupport
+                (Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder)
+              VALUES
+                (@Region, @DisplayName, @Username, @Email, @TeamsUrl, @Phone, @IsActive, @SortOrder)
+              RETURNING Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt",
+            request);
+    }
+
+    public async Task<ITSupportDto?> UpdateItSupportAsync(int id, ITSupportUpsertRequest request)
+    {
+        using var conn = CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<ITSupportDto>(
+            @"UPDATE public.ITSupport
+              SET Region = @Region,
+                  DisplayName = @DisplayName,
+                  Username = @Username,
+                  Email = @Email,
+                  TeamsUrl = @TeamsUrl,
+                  Phone = @Phone,
+                  IsActive = @IsActive,
+                  SortOrder = @SortOrder,
+                  UpdatedAt = CURRENT_TIMESTAMP
+              WHERE Id = @Id
+              RETURNING Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt",
+            new
+            {
+                Id = id,
+                request.Region,
+                request.DisplayName,
+                request.Username,
+                request.Email,
+                request.TeamsUrl,
+                request.Phone,
+                request.IsActive,
+                request.SortOrder
+            });
+    }
+
+    public async Task<bool> DeactivateItSupportAsync(int id)
+    {
+        using var conn = CreateConnection();
+        var updated = await conn.ExecuteAsync(
+            @"UPDATE public.ITSupport
+              SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+              WHERE Id = @Id AND IsActive = TRUE",
+            new { Id = id });
+        return updated > 0;
     }
 
     // ---------------- Performance Warnings ----------------

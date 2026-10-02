@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Net.Mail;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
@@ -104,8 +105,22 @@ var currentSettings = LoadSettings();
 var dashboardAuthEnabled = app.Configuration.GetValue<bool>("DashboardAuth:Enabled", false);
 var dashboardUsername = app.Configuration["DashboardAuth:Username"] ?? currentSettings.DashboardUsername;
 var dashboardPassword = app.Configuration["DashboardAuth:Password"] ?? currentSettings.DashboardPassword;
+
 const string DashboardAuthCookie = "sgr_dashboard_auth";
 var dashboardSessions = new ConcurrentDictionary<string, DateTime>();
+
+object PublicSystemSettings() => new
+{
+    currentSettings.SystemName,
+    currentSettings.CompanyName,
+    currentSettings.ApiServerUrl,
+    currentSettings.Timezone,
+    currentSettings.Language,
+    currentSettings.RealtimeEnabled,
+    DashboardUsername = dashboardUsername,
+    DashboardPassword = "",
+    DashboardPasswordConfigured = !string.IsNullOrWhiteSpace(dashboardPassword)
+};
 
 bool IsDashboardProtectedPath(PathString path)
 {
@@ -187,6 +202,9 @@ app.MapGet("/login", () => Results.Content(BuildLoginHtml(), "text/html; charset
 
 app.MapPost("/login", async (HttpContext context) =>
 {
+    if (string.IsNullOrWhiteSpace(dashboardPassword))
+        return Results.Content(BuildLoginHtml("Mật khẩu Dashboard chưa được cấu hình."), "text/html; charset=utf-8", statusCode: StatusCodes.Status503ServiceUnavailable);
+
     if (!context.Request.HasFormContentType)
         return Results.Content(BuildLoginHtml("Dữ liệu đăng nhập không hợp lệ."), "text/html; charset=utf-8", statusCode: StatusCodes.Status400BadRequest);
 
@@ -241,6 +259,7 @@ app.Use(async (context, next) =>
         "/api/performance/log",
         "/api/compliance",
         "/api/config",
+        "/api/it-support",
         "/api/agent/status"
     };
 
@@ -251,6 +270,26 @@ app.Use(async (context, next) =>
             await next();
             return;
         }
+    }
+
+    if (path.StartsWith("/api/admin/it-support", StringComparison.OrdinalIgnoreCase))
+    {
+        if (string.IsNullOrWhiteSpace(dashboardPassword))
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new { ok = false, message = "Dashboard authentication is not configured." });
+            return;
+        }
+
+        if (!HasValidDashboardSession(context))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { ok = false, message = "Unauthorized" });
+            return;
+        }
+
+        await next();
+        return;
     }
 
     // Dashboard auth is disabled by default so the intranet dashboard can load immediately.
@@ -295,6 +334,15 @@ app.MapGet("/device.js", () => Results.File(Path.Combine(webRootPath, "device.js
 app.MapGet("/agent.js", () => Results.File(Path.Combine(webRootPath, "agent.js"), "text/javascript"));
 app.MapGet("/dashboard", () => Results.File(Path.Combine(webRootPath, "dashboard.html"), "text/html; charset=utf-8"));
 app.MapGet("/devices", () => Results.File(Path.Combine(webRootPath, "devices.html"), "text/html; charset=utf-8"));
+app.MapGet("/admin/it-support", (HttpContext context) =>
+{
+    if (string.IsNullOrWhiteSpace(dashboardPassword))
+        return Results.Content("Dashboard authentication is not configured.", "text/plain; charset=utf-8", statusCode: StatusCodes.Status503ServiceUnavailable);
+    if (!HasValidDashboardSession(context))
+        return Results.Redirect("/login");
+
+    return Results.File(Path.Combine(webRootPath, "it-support.html"), "text/html; charset=utf-8");
+});
 
 static IResult DatabaseUnavailable(string message) => Results.Json(new
 {
@@ -302,6 +350,40 @@ static IResult DatabaseUnavailable(string message) => Results.Json(new
     databaseAvailable = false,
     message
 }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+static string? ValidateItSupportRequest(ITSupportUpsertRequest request)
+{
+    request.Region = request.Region?.Trim().ToUpperInvariant() ?? "";
+    request.DisplayName = request.DisplayName?.Trim() ?? "";
+    request.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
+    request.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+    request.TeamsUrl = string.IsNullOrWhiteSpace(request.TeamsUrl) ? null : request.TeamsUrl.Trim();
+    request.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+
+    if (request.Region is not ("VMB" or "VMT" or "VMN"))
+        return "Region phải là VMB, VMT hoặc VMN.";
+    if (string.IsNullOrWhiteSpace(request.DisplayName))
+        return "DisplayName là bắt buộc.";
+
+    if (request.Email is not null)
+    {
+        try
+        {
+            _ = new MailAddress(request.Email);
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+            return "Email không hợp lệ.";
+        }
+    }
+
+    if (request.TeamsUrl is not null &&
+        (!Uri.TryCreate(request.TeamsUrl, UriKind.Absolute, out var teamsUri) ||
+         (teamsUri.Scheme != Uri.UriSchemeHttps && teamsUri.Scheme != Uri.UriSchemeHttp)))
+        return "TeamsUrl phải là URL HTTP hoặc HTTPS hợp lệ.";
+
+    return null;
+}
 
 // ============================================================
 // GET /api/config
@@ -321,15 +403,104 @@ app.MapGet("/api/config", async (SqlDataAccess db) =>
     }
 });
 
-app.MapGet("/api/settings", () => Results.Ok(LoadSettings()));
+app.MapGet("/api/it-support", async (SqlDataAccess db) =>
+{
+    try
+    {
+        return Results.Ok(await db.GetActiveItSupportAsync());
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Không lấy được danh sách IT Support.");
+        return DatabaseUnavailable("Không lấy được thông tin IT Support.");
+    }
+});
+
+app.MapGet("/api/admin/it-support", async (SqlDataAccess db) =>
+{
+    try
+    {
+        return Results.Ok(await db.GetAllItSupportAsync());
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Không lấy được danh sách IT Support quản trị.");
+        return DatabaseUnavailable("Không lấy được danh sách IT Support.");
+    }
+});
+
+app.MapPost("/api/admin/it-support", async (ITSupportUpsertRequest request, SqlDataAccess db) =>
+{
+    var validationError = ValidateItSupportRequest(request);
+    if (validationError is not null)
+        return Results.BadRequest(new { message = validationError });
+
+    try
+    {
+        return Results.Created("/api/admin/it-support", await db.CreateItSupportAsync(request));
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Không tạo được IT Support.");
+        return DatabaseUnavailable("Không lưu được IT Support.");
+    }
+});
+
+app.MapPut("/api/admin/it-support/{id:int}", async (int id, ITSupportUpsertRequest request, SqlDataAccess db) =>
+{
+    if (id <= 0)
+        return Results.BadRequest(new { message = "Id không hợp lệ." });
+
+    var validationError = ValidateItSupportRequest(request);
+    if (validationError is not null)
+        return Results.BadRequest(new { message = validationError });
+
+    try
+    {
+        var updated = await db.UpdateItSupportAsync(id, request);
+        return updated is null ? (IResult)Results.NotFound() : Results.Ok(updated);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Không cập nhật được IT Support Id={Id}.", id);
+        return DatabaseUnavailable("Không cập nhật được IT Support.");
+    }
+});
+
+app.MapDelete("/api/admin/it-support/{id:int}", async (int id, SqlDataAccess db) =>
+{
+    if (id <= 0)
+        return Results.BadRequest(new { message = "Id không hợp lệ." });
+
+    try
+    {
+        return await db.DeactivateItSupportAsync(id) ? (IResult)Results.NoContent() : Results.NotFound();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Không deactivate được IT Support Id={Id}.", id);
+        return DatabaseUnavailable("Không thể ngừng sử dụng IT Support.");
+    }
+});
+
+app.MapGet("/api/settings", () => Results.Ok(PublicSystemSettings()));
 
 app.MapPost("/api/settings", (SystemSettingsDto settings) =>
 {
+    if (!string.IsNullOrWhiteSpace(settings.DashboardUsername))
+        dashboardUsername = settings.DashboardUsername.Trim();
+    if (!string.IsNullOrWhiteSpace(settings.DashboardPassword))
+        dashboardPassword = settings.DashboardPassword;
+    if (dashboardAuthEnabled && string.IsNullOrWhiteSpace(dashboardPassword))
+        return Results.BadRequest(new { message = "DashboardAuth:Password must be configured." });
+    if (!string.IsNullOrWhiteSpace(dashboardPassword) && dashboardPassword.Length < 3)
+        return Results.BadRequest(new { message = "Mật khẩu Dashboard phải có ít nhất 3 ký tự." });
+
+    settings.DashboardUsername = dashboardUsername;
+    settings.DashboardPassword = dashboardPassword;
     SaveSettings(settings);
-    dashboardUsername = settings.DashboardUsername;
-    dashboardPassword = settings.DashboardPassword;
     currentSettings = settings;
-    return Results.Ok(settings);
+    return Results.Ok(PublicSystemSettings());
 });
 
 // ============================================================

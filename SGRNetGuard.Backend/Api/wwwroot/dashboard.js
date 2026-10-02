@@ -575,7 +575,7 @@ function renderTable(emptyMessage) {
       <td class="metric ${metricClass(d.diskPercent)}">${fmtPercent(d.diskPercent)}</td>
       <td>
         <div class="anbm-icons">
-          ${anbmIcon(d.adJoined)}${anbmIcon(d.trellixInstalled)}${anbmIcon(d.desktopCentralInstalled)}${anbmIcon(d.wsusInstalled)}
+          ${anbmIcon(d.adJoined)}${anbmIcon(d.trellixInstalled)}${anbmIcon(d.desktopCentralInstalled)}${anbmIcon(d.wsusInstalled ?? false)}
         </div>
       </td>
       <td>${d.warningsToday > 0 ? `<span class="metric metric-bad">${d.warningsToday}</span>` : "0"}</td>
@@ -684,11 +684,6 @@ async function saveSettings(event) {
     dashboardUsername: String(data.dashboardUsername || "admin").trim(),
     dashboardPassword: String(data.dashboardPassword || "").trim()
   };
-
-  if (!payload.dashboardPassword) {
-    const current = settingsCache || await loadSettings();
-    payload.dashboardPassword = current?.dashboardPassword || "Sun@2026";
-  }
 
   if (payload.dashboardPassword && payload.dashboardPassword.length < 3) {
     alert("Mật khẩu Dashboard phải có ít nhất 3 ký tự.");

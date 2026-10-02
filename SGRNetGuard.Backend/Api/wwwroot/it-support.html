@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quản lý IT Support - SGR NetGuard</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/it-support.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">🛡️</span><span>SGR NetGuard</span></div>
+    <nav class="page-nav" aria-label="Điều hướng">
+      <a href="/">Dashboard</a>
+      <a href="/devices">Thông tin máy</a>
+      <a class="page-nav-active" href="/admin/it-support">IT Support</a>
+    </nav>
+    <a class="support-logout" href="/logout">Đăng xuất</a>
+  </header>
+
+  <main class="support-main">
+    <div class="support-heading">
+      <div>
+        <h1>Quản lý IT Support</h1>
+        <p id="supportStatus" role="status" aria-live="polite">Đang tải dữ liệu...</p>
+      </div>
+      <button type="button" class="primary-button" id="addSupportButton">+ Thêm IT Support</button>
+    </div>
+
+    <div class="support-table-wrap">
+      <table class="support-table">
+        <thead>
+          <tr>
+            <th>Vùng</th>
+            <th>Nhân viên</th>
+            <th>Email</th>
+            <th>Teams</th>
+            <th>SĐT</th>
+            <th>Trạng thái</th>
+            <th>Thao tác</th>
+          </tr>
+        </thead>
+        <tbody id="supportRows">
+          <tr><td colspan="7" class="support-empty">Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <dialog class="support-dialog" id="supportDialog" aria-labelledby="dialogTitle">
+    <form id="supportForm">
+      <div class="support-dialog-heading">
+        <h2 id="dialogTitle">Thêm IT Support</h2>
+        <button type="button" class="icon-close" id="closeDialogButton" aria-label="Đóng">×</button>
+      </div>
+      <input type="hidden" id="supportId" />
+      <div class="support-form-grid">
+        <label>Vùng
+          <select id="regionInput" required>
+            <option value="">Chọn vùng</option>
+            <option value="VMB">VMB</option>
+            <option value="VMT">VMT</option>
+            <option value="VMN">VMN</option>
+          </select>
+        </label>
+        <label>Tên hiển thị
+          <input id="displayNameInput" maxlength="160" required />
+        </label>
+        <label>Username
+          <input id="usernameInput" maxlength="120" />
+        </label>
+        <label>Email
+          <input id="emailInput" type="email" maxlength="254" />
+        </label>
+        <label>Teams URL
+          <input id="teamsUrlInput" type="url" maxlength="1000" placeholder="https://..." />
+        </label>
+        <label>Số điện thoại
+          <input id="phoneInput" type="tel" maxlength="40" />
+        </label>
+        <label>Thứ tự
+          <input id="sortOrderInput" type="number" min="0" max="2147483647" step="1" value="0" required />
+        </label>
+        <label class="support-active-field">
+          <input id="activeInput" type="checkbox" checked /> Đang sử dụng
+        </label>
+      </div>
+      <p class="support-form-error" id="formError" role="alert"></p>
+      <div class="support-dialog-actions">
+        <button type="button" class="secondary-button" id="cancelDialogButton">Hủy</button>
+        <button type="submit" class="primary-button" id="saveSupportButton">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/it-support.js" defer></script>
+</body>
+</html>
