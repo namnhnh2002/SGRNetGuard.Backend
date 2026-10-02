@@ -55,7 +55,8 @@ public class SqlDataAccess
         var schemaPath = Path.Combine(baseDirectory, "Database", "postgresql_schema.sql");
         var seedPath = Path.Combine(baseDirectory, "Database", "postgresql_seed.sql");
         var itSupportUpgradePath = Path.Combine(baseDirectory, "Database", "09_it_support_upgrade.sql");
-        if (!File.Exists(schemaPath) || !File.Exists(seedPath) || !File.Exists(itSupportUpgradePath))
+        var itSupportSiteUpgradePath = Path.Combine(baseDirectory, "Database", "10_it_support_site_upgrade.sql");
+        if (!File.Exists(schemaPath) || !File.Exists(seedPath) || !File.Exists(itSupportUpgradePath) || !File.Exists(itSupportSiteUpgradePath))
             throw new FileNotFoundException("Không tìm thấy file bootstrap PostgreSQL trong bản publish.");
 
         await using var conn = CreateConnection();
@@ -68,6 +69,8 @@ public class SqlDataAccess
         command.CommandText = await File.ReadAllTextAsync(seedPath);
         await command.ExecuteNonQueryAsync();
         command.CommandText = await File.ReadAllTextAsync(itSupportUpgradePath);
+        await command.ExecuteNonQueryAsync();
+        command.CommandText = await File.ReadAllTextAsync(itSupportSiteUpgradePath);
         await command.ExecuteNonQueryAsync();
     }
 
@@ -184,41 +187,104 @@ public class SqlDataAccess
     {
         using var conn = CreateConnection();
         var contacts = await conn.QueryAsync<ITSupportDto>(
-            @"SELECT Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
+            @"SELECT Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
+              FROM public.ITSupport
+              WHERE IsActive = TRUE AND Site IS NOT NULL
+              ORDER BY Region, Site");
+        return contacts.AsList();
+    }
+
+    public async Task<ITSupportDto?> GetActiveItSupportForSiteAsync(string site)
+    {
+        using var conn = CreateConnection();
+        return await conn.QuerySingleOrDefaultAsync<ITSupportDto>(
+            @"SELECT Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
               FROM public.ITSupport
               WHERE IsActive = TRUE
-              ORDER BY SortOrder, Region, Id");
-        return contacts.AsList();
+                AND lower(btrim(Site)) = lower(btrim(@Site))
+              LIMIT 1",
+            new { Site = site });
     }
 
     public async Task<IReadOnlyList<ITSupportDto>> GetAllItSupportAsync()
     {
         using var conn = CreateConnection();
         var contacts = await conn.QueryAsync<ITSupportDto>(
-            @"SELECT Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
+            @"SELECT Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt
               FROM public.ITSupport
-              ORDER BY SortOrder, Region, Id");
+              WHERE Site IS NOT NULL
+              ORDER BY Region, Site, IsActive DESC, UpdatedAt DESC, Id DESC");
         return contacts.AsList();
+    }
+
+    public async Task<bool> SiteExistsAsync(string site, string region)
+    {
+        using var conn = CreateConnection();
+        var exists = await conn.ExecuteScalarAsync<bool>(
+            @"SELECT EXISTS (
+                SELECT 1
+              FROM public.Sites
+              WHERE IsActive = TRUE
+                AND upper(btrim(Region)) = upper(btrim(@Region))
+                AND lower(btrim(SiteName)) = lower(btrim(@Site)))",
+            new { Site = site, Region = region });
+        return exists;
     }
 
     public async Task<ITSupportDto> CreateItSupportAsync(ITSupportUpsertRequest request)
     {
         using var conn = CreateConnection();
-        return await conn.QuerySingleAsync<ITSupportDto>(
-            @"INSERT INTO public.ITSupport
-                (Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder)
-              VALUES
-                (@Region, @DisplayName, @Username, @Email, @TeamsUrl, @Phone, @IsActive, @SortOrder)
-              RETURNING Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt",
-            request);
+                await conn.OpenAsync();
+                await using var transaction = await conn.BeginTransactionAsync();
+                if (request.IsActive)
+                {
+                        await conn.ExecuteAsync(
+                                @"UPDATE public.ITSupport
+                                    SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+                                    WHERE IsActive = TRUE AND lower(btrim(Site)) = lower(btrim(@Site))",
+                                new { request.Site }, transaction);
+                }
+
+                var created = await conn.QuerySingleAsync<ITSupportDto>(
+                        @"INSERT INTO public.ITSupport
+                                (Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder)
+                            VALUES
+                                (@Site, @Region, @DisplayName, @Username, @Email, @TeamsUrl, @Phone, @IsActive, @SortOrder)
+                            RETURNING Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt",
+                        request, transaction);
+                await transaction.CommitAsync();
+                return created;
     }
 
     public async Task<ITSupportDto?> UpdateItSupportAsync(int id, ITSupportUpsertRequest request)
     {
         using var conn = CreateConnection();
-        return await conn.QuerySingleOrDefaultAsync<ITSupportDto>(
+        await conn.OpenAsync();
+        await using var transaction = await conn.BeginTransactionAsync();
+        var existingId = await conn.ExecuteScalarAsync<int?>(
+            "SELECT Id FROM public.ITSupport WHERE Id = @Id",
+            new { Id = id }, transaction);
+        if (existingId is null)
+        {
+            await transaction.RollbackAsync();
+            return null;
+        }
+
+        if (request.IsActive)
+        {
+            await conn.ExecuteAsync(
+                @"UPDATE public.ITSupport
+                  SET IsActive = FALSE, UpdatedAt = CURRENT_TIMESTAMP
+                  WHERE IsActive = TRUE
+                    AND Id <> @Id
+                    AND lower(btrim(Site)) = lower(btrim(@Site))",
+                new { Id = id, request.Site }, transaction);
+        }
+
+        var updated = await conn.QuerySingleOrDefaultAsync<ITSupportDto>(
             @"UPDATE public.ITSupport
-              SET Region = @Region,
+              SET Site = @Site,
+                  Region = @Region,
                   DisplayName = @DisplayName,
                   Username = @Username,
                   Email = @Email,
@@ -228,10 +294,11 @@ public class SqlDataAccess
                   SortOrder = @SortOrder,
                   UpdatedAt = CURRENT_TIMESTAMP
               WHERE Id = @Id
-              RETURNING Id, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt",
+              RETURNING Id, Site, Region, DisplayName, Username, Email, TeamsUrl, Phone, IsActive, SortOrder, CreatedAt, UpdatedAt",
             new
             {
                 Id = id,
+                request.Site,
                 request.Region,
                 request.DisplayName,
                 request.Username,
@@ -240,7 +307,9 @@ public class SqlDataAccess
                 request.Phone,
                 request.IsActive,
                 request.SortOrder
-            });
+            }, transaction);
+        await transaction.CommitAsync();
+        return updated;
     }
 
     public async Task<bool> DeactivateItSupportAsync(int id)

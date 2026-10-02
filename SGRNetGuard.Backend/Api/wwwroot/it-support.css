@@ -111,7 +111,7 @@
   .support-main { width: calc(100% - 24px); margin: 20px auto; }
   .support-heading { align-items: flex-start; }
   .support-heading .primary-button { flex: 0 0 auto; }
-  .support-table { min-width: 850px; }
+  .support-table { min-width: 1000px; }
   .support-form-grid { grid-template-columns: 1fr; }
   .support-dialog form { padding: 16px; }
 }

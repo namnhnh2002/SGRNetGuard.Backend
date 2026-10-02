@@ -1,15 +1,17 @@
 (() => {
   const apiPath = "/api/admin/it-support";
-  const regionOrder = { VMB: 0, VMT: 1, VMN: 2 };
   const status = document.getElementById("supportStatus");
   const rows = document.getElementById("supportRows");
   const dialog = document.getElementById("supportDialog");
   const form = document.getElementById("supportForm");
   const formError = document.getElementById("formError");
-  const contactsById = new Map();
+  const contactsBySite = new Map();
+  const siteMap = new Map();
+  let sites = [];
 
   const fields = {
     id: document.getElementById("supportId"),
+    site: document.getElementById("siteInput"),
     region: document.getElementById("regionInput"),
     displayName: document.getElementById("displayNameInput"),
     username: document.getElementById("usernameInput"),
@@ -35,6 +37,10 @@
     }
   }
 
+  function siteKey(value) {
+    return String(value ?? "").trim().toLocaleLowerCase();
+  }
+
   async function request(url, options = {}) {
     const response = await fetch(url, {
       credentials: "same-origin",
@@ -52,37 +58,52 @@
     return response.status === 204 ? null : response.json();
   }
 
-  function render(contacts) {
-    contactsById.clear();
-    const sorted = [...contacts].sort((left, right) =>
-      (regionOrder[left.region] ?? 99) - (regionOrder[right.region] ?? 99) ||
-      left.sortOrder - right.sortOrder || left.id - right.id);
+  function populateSiteOptions() {
+    siteMap.clear();
+    fields.site.innerHTML = '<option value="">Chọn Site</option>' + sites.map(site => {
+      siteMap.set(siteKey(site.site), site);
+      return `<option value="${escapeHtml(site.site)}">${escapeHtml(site.site)} (${escapeHtml(site.region)})</option>`;
+    }).join("");
+  }
 
-    for (const contact of sorted) contactsById.set(String(contact.id), contact);
-    if (sorted.length === 0) {
-      rows.innerHTML = '<tr><td colspan="7" class="support-empty">Chưa có thông tin IT Support.</td></tr>';
+  function render(contacts) {
+    contactsBySite.clear();
+    for (const contact of [...contacts].sort((left, right) =>
+      Number(right.isActive) - Number(left.isActive) ||
+      Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || "") ||
+      right.id - left.id)) {
+      const key = siteKey(contact.site);
+      if (key && !contactsBySite.has(key)) contactsBySite.set(key, contact);
+    }
+
+    if (sites.length === 0) {
+      rows.innerHTML = '<tr><td colspan="8" class="support-empty">Chưa có Site đang hoạt động.</td></tr>';
       return;
     }
 
-    rows.innerHTML = sorted.map(contact => {
-      const teamsUrl = safeHttpUrl(contact.teamsUrl);
+    rows.innerHTML = sites.map(site => {
+      const contact = contactsBySite.get(siteKey(site.site));
+      const teamsUrl = safeHttpUrl(contact?.teamsUrl);
       const teams = teamsUrl
         ? `<a class="support-link" href="${escapeHtml(teamsUrl)}" target="_blank" rel="noopener noreferrer">Mở Teams</a>`
         : '<span class="support-muted">Chưa cấu hình</span>';
-      const stateClass = contact.isActive ? "support-state-active" : "support-state-inactive";
-      const stateText = contact.isActive ? "Đang dùng" : "Đã ngừng";
-      const statusAction = contact.isActive
-        ? `<button type="button" class="secondary-button" data-action="deactivate" data-id="${contact.id}">Ngừng</button>`
-        : `<button type="button" class="secondary-button" data-action="activate" data-id="${contact.id}">Kích hoạt</button>`;
+      const stateClass = contact?.isActive ? "support-state-active" : "support-state-inactive";
+      const stateText = contact?.isActive ? "Đang dùng" : contact ? "Đã ngừng" : "Chưa cấu hình";
+      const actionButtons = contact
+        ? `<button type="button" class="secondary-button" data-action="edit" data-site="${escapeHtml(site.site)}">Sửa</button>${contact.isActive
+          ? `<button type="button" class="secondary-button" data-action="deactivate" data-site="${escapeHtml(site.site)}">Ngừng</button>`
+          : `<button type="button" class="secondary-button" data-action="activate" data-site="${escapeHtml(site.site)}">Kích hoạt</button>`}`
+        : `<button type="button" class="secondary-button" data-action="add" data-site="${escapeHtml(site.site)}">Thêm</button>`;
 
       return `<tr>
-        <td><strong>${escapeHtml(contact.region)}</strong></td>
-        <td><span class="support-name">${escapeHtml(contact.displayName)}</span><br><span class="support-muted">${escapeHtml(contact.username || "")}</span></td>
-        <td>${contact.email ? `<a class="support-link" href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a>` : '<span class="support-muted">-</span>'}</td>
+        <td><strong>${escapeHtml(site.site)}</strong></td>
+        <td>${escapeHtml(site.region)}</td>
+        <td>${contact ? `<span class="support-name">${escapeHtml(contact.displayName)}</span><br><span class="support-muted">${escapeHtml(contact.username || "")}</span>` : '<span class="support-muted">-</span>'}</td>
+        <td>${contact?.email ? `<a class="support-link" href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a>` : '<span class="support-muted">-</span>'}</td>
         <td>${teams}</td>
-        <td>${escapeHtml(contact.phone || "-")}</td>
+        <td>${escapeHtml(contact?.phone || "-")}</td>
         <td><span class="support-state ${stateClass}">${stateText}</span></td>
-        <td><div class="support-row-actions"><button type="button" class="secondary-button" data-action="edit" data-id="${contact.id}">Sửa</button>${statusAction}</div></td>
+        <td><div class="support-row-actions">${actionButtons}</div></td>
       </tr>`;
     }).join("");
   }
@@ -90,21 +111,30 @@
   async function loadContacts() {
     status.textContent = "Đang tải dữ liệu...";
     try {
-      const contacts = await request(apiPath);
+      const [contacts, config] = await Promise.all([request(apiPath), request("/api/config")]);
+      const configuredSites = Array.isArray(config.sites) ? config.sites : [];
+      const uniqueSites = new Map();
+      for (const site of configuredSites) {
+        if (site.site && site.region && !uniqueSites.has(siteKey(site.site)))
+          uniqueSites.set(siteKey(site.site), site);
+      }
+      sites = [...uniqueSites.values()];
+      populateSiteOptions();
       render(Array.isArray(contacts) ? contacts : []);
-      status.textContent = `${contacts.length} liên hệ`;
+      status.textContent = `${sites.length} Site`;
     } catch (error) {
-      rows.innerHTML = `<tr><td colspan="7" class="support-empty">${escapeHtml(error.message)}</td></tr>`;
+      rows.innerHTML = `<tr><td colspan="8" class="support-empty">${escapeHtml(error.message)}</td></tr>`;
       status.textContent = "Không tải được dữ liệu";
     }
   }
 
-  function openDialog(contact = null) {
+  function openDialog(site = null, contact = null) {
     form.reset();
     formError.textContent = "";
     document.getElementById("dialogTitle").textContent = contact ? "Sửa IT Support" : "Thêm IT Support";
     fields.id.value = contact?.id ?? "";
-    fields.region.value = contact?.region ?? "";
+    fields.site.value = contact?.site ?? site?.site ?? "";
+    updateRegionFromSite();
     fields.displayName.value = contact?.displayName ?? "";
     fields.username.value = contact?.username ?? "";
     fields.email.value = contact?.email ?? "";
@@ -118,6 +148,7 @@
 
   function readForm() {
     return {
+      site: fields.site.value,
       region: fields.region.value,
       displayName: fields.displayName.value.trim(),
       username: fields.username.value.trim() || null,
@@ -129,7 +160,12 @@
     };
   }
 
+  function updateRegionFromSite() {
+    fields.region.value = siteMap.get(siteKey(fields.site.value))?.region ?? "";
+  }
+
   document.getElementById("addSupportButton").addEventListener("click", () => openDialog());
+  fields.site.addEventListener("change", updateRegionFromSite);
   document.getElementById("closeDialogButton").addEventListener("click", () => dialog.close());
   document.getElementById("cancelDialogButton").addEventListener("click", () => dialog.close());
 
@@ -154,22 +190,29 @@
   rows.addEventListener("click", async event => {
     const button = event.target.closest("button[data-action]");
     if (!button) return;
-    const contact = contactsById.get(button.dataset.id);
-    if (!contact) return;
+    const site = siteMap.get(siteKey(button.dataset.site));
+    if (!site) return;
+    const contact = contactsBySite.get(siteKey(site.site));
 
     if (button.dataset.action === "edit") {
-      openDialog(contact);
+      openDialog(site, contact);
+      return;
+    }
+
+    if (button.dataset.action === "add") {
+      openDialog(site);
       return;
     }
 
     try {
       if (button.dataset.action === "deactivate") {
-        if (!window.confirm(`Ngừng sử dụng IT Support ${contact.displayName}?`)) return;
+        if (!contact || !window.confirm(`Ngừng IT Support của ${site.site}?`)) return;
         await request(`${apiPath}/${contact.id}`, { method: "DELETE" });
       } else {
+        if (!contact) return;
         await request(`${apiPath}/${contact.id}`, {
           method: "PUT",
-          body: JSON.stringify({ ...contact, isActive: true })
+          body: JSON.stringify({ ...contact, site: site.site, region: site.region, isActive: true })
         });
       }
       await loadContacts();
