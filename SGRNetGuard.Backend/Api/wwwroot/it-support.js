@@ -40,6 +40,11 @@
     }
   }
 
+  function teamsChatUrl(email) {
+    if (!email) return null;
+    return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email.trim())}`;
+  }
+
   function siteKey(value) {
     return String(value ?? "").trim().toLocaleLowerCase();
   }
@@ -100,7 +105,7 @@
         ? `site:${siteKey(mapping.site)}`
         : `region:${mapping.region}`;
       const contact = contactsByKey.get(key);
-      const teamsUrl = safeHttpUrl(contact?.teamsUrl);
+      const teamsUrl = safeHttpUrl(contact?.teamsUrl) || safeHttpUrl(teamsChatUrl(contact?.email));
       const teams = teamsUrl
         ? `<a class="support-link" href="${escapeHtml(teamsUrl)}" target="_blank" rel="noopener noreferrer">Mở Teams</a>`
         : '<span class="support-muted">Chưa cấu hình</span>';

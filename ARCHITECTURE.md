@@ -38,7 +38,7 @@ Mã tích hợp nằm trong `SGRNetGuard.Backend/ClientIntegration/CLIENT_CODE_T
 Agent có các nhiệm vụ chính:
 
 - Lấy cấu hình site, subnet, DNS và người phụ trách từ API qua `GET /api/config`.
-- Mạng nội bộ lấy IT Support chính xác theo Site qua `GET /api/it-support?site={site}`; mạng ngoài lấy Region default qua `GET /api/it-support?region={region}`. Agent cache Region và Site riêng tại `%LocalAppData%\SGRNetworkAgent\it-support-cache.json` và refresh mỗi 10 phút.
+- Mạng nội bộ lấy IT Support chính xác theo Site qua `GET /api/it-support?site={site}`; mạng ngoài lấy Region default qua `GET /api/it-support?region={region}`. Backend trả TeamsUrl đã cấu hình hoặc tạo chat link từ Email khi TeamsUrl chưa có. Agent cache Region và Site riêng tại `%LocalAppData%\SGRNetworkAgent\it-support-cache.json` và refresh mỗi 10 phút.
 - Cache cấu hình tại máy user để app vẫn dùng được khi API tạm thời không truy cập được.
 - Nhận diện site/vùng từ địa chỉ IP LAN và subnet.
 - Gửi heartbeat định kỳ, thường mỗi 60 giây.

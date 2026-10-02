@@ -394,10 +394,20 @@ static object ToAgentItSupport(ITSupportDto contact) => new
     contact.Region,
     contact.DisplayName,
     contact.Email,
-    contact.TeamsUrl,
+    TeamsUrl = GetTeamsUrl(contact),
     contact.Phone,
     contact.IsActive
 };
+
+static string? GetTeamsUrl(ITSupportDto contact)
+{
+    if (!string.IsNullOrWhiteSpace(contact.TeamsUrl))
+        return contact.TeamsUrl;
+    if (string.IsNullOrWhiteSpace(contact.Email))
+        return null;
+
+    return $"https://teams.microsoft.com/l/chat/0/0?users={Uri.EscapeDataString(contact.Email.Trim())}";
+}
 
 // ============================================================
 // GET /api/config
